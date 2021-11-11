@@ -1,2 +1,2 @@
-# cumulative_avl
-C++ AVL tree that can keep track of cumulative data
+# ordered_binary_trees
+Binary tree structures that keep track of rank indices.
