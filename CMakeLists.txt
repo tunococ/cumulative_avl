@@ -23,9 +23,15 @@ target_sources(ordered_binary_trees PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include/ordered_binary_trees/ordered_binary_tree.hpp"
 )
 
-# Tests are only included if this is not a subproject.
-
 if(NOT_SUBPROJECT)
+
+    # Doxygen
+
+    find_package(Doxygen OPTIONAL_COMPONENTS dot)
+    doxygen_add_docs(doxygen "${CMAKE_CURRENT_SOURCE_DIR}/include"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include")
+
+    # Tests are only included if this is not a subproject.
 
     include(CTest)
 
