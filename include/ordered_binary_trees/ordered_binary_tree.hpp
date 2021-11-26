@@ -140,6 +140,14 @@ struct OrderedBinaryTree {
 
     /**
      *  @brief
+     *  Returns `true` iff `this` is a root node.
+     */
+    constexpr bool is_root() const {
+      return !parent;
+    }
+
+    /**
+     *  @brief
      *  Returns the `size` of node `n`.
      *  `n` may be null, in which case the return value will be `0`.
      */
@@ -260,12 +268,19 @@ struct OrderedBinaryTree {
 
     /**
      *  @brief
-     *  Calls `update_upwards()` with `update_size()` as the update function.
+     *  Static version of `update_size()`.
+     */
+    static constexpr bool update_node_size(Node* n) {
+      return n->update_size();
+    }
+
+    /**
+     *  @brief
+     *  Calls `traverse_upwards()` with `update_node_size()` as the unary
+     *    function.
      */
     constexpr Node* update_sizes_upwards() {
-      return traverse_upwards([](Node* n) {
-            return n->update_size();
-          });
+      return traverse_upwards(update_node_size);
     }
   
     /**
@@ -964,6 +979,161 @@ struct OrderedBinaryTree {
       r->parent = p;
     }
 
+    /**
+     *  @brief
+     *  Performs a depth-one splay step, and returns the former value of
+     *    `parent`.
+     *
+     *  This function moves up `this` node in the tree by one position while
+     *    maintaining the order of all the nodes.
+     *  `parent` must not be null before calling this function.
+     * 
+     *  The return value is the value of `parent` prior to the call.
+     *  This is the node whose data might need to be updated before updating
+     *    `this`.
+     */
+    constexpr Node* splay_1() {
+      ASSERT(parent);
+      Node* p{parent};
+      ChildType child_type{get_child_type()};
+      if (child_type == kLeftChild) {
+        parent->rotate_right();
+      } else {
+        parent->rotate_left();
+      }
+      return p;
+    }
+
+    /**
+     *  @brief
+     *  Performs a depth-two splay step, and returns the former value of
+     *    `parent->parent`.
+     *
+     *  This function moves up `this` node in the tree by two positions while
+     *    maintaining the order of all the nodes.
+     *  `parent` and `parent->parent` must not be null before calling this
+     *    function.
+     *
+     *  The return value is `{parent->parent, parent}` prior to the call.
+     *  These are nodes whose data might need to be updated before updating
+     *    `this`.
+     *  Node that the former `parent->parent` may become a child of the former
+     *    `parent`, so it is safer to update the `first` component of the
+     *    return value before `second`.
+     */
+    constexpr std::pair<Node*, Node*> splay_2() {
+      ASSERT(parent);
+      ASSERT(parent->parent);
+      Node* p{parent};
+      Node* pp{p->parent};
+      Node* ppp{pp->parent};
+      ChildType child_type{get_child_type()};
+      ChildType p_child_type{p->get_child_type()};
+      ChildType pp_child_type{pp->get_child_type()};
+      if (p_child_type == kLeftChild) {
+        if (child_type == kLeftChild) {
+          // left-left zig-zig
+          Node* s{p->right_child}; // s = sibling
+          pp->left_child = s;
+          if (s) {
+            s->parent = pp;
+          }
+          p->right_child = pp;
+          pp->parent = p;
+          p->left_child = right_child;
+          if (right_child) {
+            right_child->parent = p;
+          }
+          right_child = p;
+          p->parent = this;
+        } else {
+          // left-right zig-zag
+          Node* left{left_child};
+          Node* right{right_child};
+          p->right_child = left;
+          if (left) {
+            left->parent = p;
+          }
+          left_child = p;
+          p->parent = this;
+          pp->left_child = right;
+          if (right) {
+            right->parent = pp;
+          }
+          right_child = pp;
+          pp->parent = this;
+        }
+      } else if (child_type == kLeftChild) {
+        // right-left zig-zag
+        Node* left{left_child};
+        Node* right{right_child};
+        p->left_child = right;
+        if (right) {
+          right->parent = p;
+        }
+        right_child = p;
+        p->parent = this;
+        pp->right_child = left;
+        if (left) {
+          left->parent = pp;
+        }
+        left_child = pp;
+        pp->parent = this;
+      } else {
+        // right-right zig-zig
+        Node* s{p->left_child};
+        pp->right_child = s;
+        if (s) {
+          s->parent = pp;
+        }
+        p->left_child = pp;
+        pp->parent = p;
+        p->right_child = left_child;
+        if (left_child) {
+          left_child->parent = p;
+        }
+        left_child = p;
+        p->parent = this;
+      }
+
+      parent = ppp;
+      if (pp_child_type == kLeftChild) {
+        ppp->left_child = this;
+      } else if (pp_child_type == kRightChild) {
+        ppp->right_child = this;
+      }
+
+      return {pp, p};
+    }
+
+    /**
+     *  @brief
+     *  Splays a node up to be the new root.
+     * 
+     *  The function `f` for *updating* node data along the way can be
+     *    customized.
+     *  `f` should take on argument of type `Node*`.
+     *  The return value of `f` is not used.
+     */
+    template<class FunctionType>
+    constexpr void splay(FunctionType f) {
+      while (parent) {
+        if (parent->parent) {
+          std::pair<Node*, Node*> pp_p{splay_2()};
+          f(pp_p.first);
+          f(pp_p.second);
+        } else {
+          Node* p{splay_1()};
+          f(p);
+        }
+      }
+      f(this);
+    }
+
+    constexpr void splay() {
+      splay(Node::update_node_size);
+    }
+
   }; // struct Node
 
   /**
@@ -1269,6 +1439,32 @@ struct OrderedBinaryTree {
    */
   constexpr void delete_nodes() {
     Node::delete_nodes(root);
+  }
+
+  constexpr void rotate_left(Node* n) {
+    n->rotate_left();
+    if (n == root) {
+      root = root->parent;
+    }
+  }
+
+  constexpr void rotate_right(Node* n) {
+    n->rotate_right();
+    if (n == root) {
+      root = root->parent;
+    }
+  }
+
+  template<class FunctionType>
+  constexpr void splay(Node* n, FunctionType f) {
+    ASSERT(root);
+    ASSERT(n);
+    n->splay(f);
+    root = n;
+  }
+
+  constexpr void splay(Node* n) {
+    splay(n, Node::update_node_size);
   }
 
   /**

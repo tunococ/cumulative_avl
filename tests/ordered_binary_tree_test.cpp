@@ -426,16 +426,14 @@ TEST_CASE("OrderedBinaryTree -- insert and remove subtrees") {
   using Node = typename Tree::Node;
 
   Tree tree_1;
+  vector<string> list_1;
   insert_to_tree(tree_1, test_insertions_2);
-
-  vector<string> inorder_1;
-  insert_to_list(inorder_1, test_insertions_2);
+  insert_to_list(list_1, test_insertions_2);
 
   Tree tree_2;
+  vector<string> list_2;
   insert_to_tree(tree_2, test_insertions_3);
-
-  vector<string> inorder_2;
-  insert_to_list(inorder_2, test_insertions_3);
+  insert_to_list(list_2, test_insertions_3);
 
   cout << "tree_1:\n";
   dump_tree(cout, tree_1);
@@ -450,21 +448,21 @@ TEST_CASE("OrderedBinaryTree -- insert and remove subtrees") {
     cout << "Joined tree_2 to tree_1 at index " << i << ":\n";
     dump_tree(cout, tree_a);
 
-    vector<string> inorder_a{inorder_1};
-    inorder_a.insert(
-        std::next(inorder_a.begin(), i),
-        inorder_2.begin(), inorder_2.end());
+    vector<string> list_a{list_1};
+    list_a.insert(
+        std::next(list_a.begin(), i),
+        list_2.begin(), list_2.end());
     
-    CHECK(tree_equals_list(tree_a, inorder_a));
+    CHECK(tree_equals_list(tree_a, list_a));
 
     if (i > 0) {
       // If the subtree was joined at index > 0, removing the subtree at index
       //   `i` would reverse the insert operation.
       Tree tree_c{tree_1.unlink_at_index(i)};
-      CHECK(tree_equals_list(tree_c, inorder_2));
+      CHECK(tree_equals_list(tree_c, list_2));
       tree_c.delete_nodes();
 
-      CHECK(tree_equals_list(tree_a, inorder_1));
+      CHECK(tree_equals_list(tree_a, list_1));
     }
 
     tree_a.delete_nodes();
@@ -475,3 +473,75 @@ TEST_CASE("OrderedBinaryTree -- insert and remove subtrees") {
   tree_1.delete_nodes();
 }
 
+TEST_CASE("OrderedBinaryTree -- rotate") {
+  using Tree = obt::OrderedBinaryTree<string>;
+  using Node = typename Tree::Node;
+
+  Tree tree;
+  vector<string> list;
+  insert_to_tree(tree, test_insertions_1);
+  insert_to_list(list, test_insertions_1);
+
+  cout << "Starting tree:\n";
+  dump_tree(cout, tree);
+
+  SECTION("rotate_left") {
+    for (size_t i{0}; i < tree.size(); ++i) {
+      Node* n{tree.find_node_at_index(i)};
+      if (!n->right_child) {
+        continue;
+      }
+      tree.rotate_left(n);
+      n->update_size();
+      if (n->parent) {
+        n->parent->update_size();
+      }
+      cout << "After rotate_left at index " << i
+          << " (value: " << n->data << "):\n";
+      dump_tree(cout, tree);
+      CHECK(tree_equals_list(tree, list));
+    }
+  }
+  SECTION("rotate_right") {
+    for (size_t i{0}; i < tree.size(); ++i) {
+      Node* n{tree.find_node_at_index(i)};
+      if (!n->left_child) {
+        continue;
+      }
+      tree.rotate_right(n);
+      n->update_size();
+      if (n->parent) {
+        n->parent->update_size();
+      }
+      cout << "After rotate_right at index " << i
+          << " (value: " << n->data << "):\n";
+      dump_tree(cout, tree);
+      CHECK(tree_equals_list(tree, list));
+    }
+  }
+}
+
+TEST_CASE("OrderedBinaryTree -- splay") {
+  using Tree = obt::OrderedBinaryTree<string>;
+  using Node = typename Tree::Node;
+
+  Tree tree;
+  vector<string> list;
+  insert_to_tree(tree, test_insertions_1);
+  insert_to_list(list, test_insertions_1);
+
+  cout << "Starting tree:\n";
+  dump_tree(cout, tree);
+
+  for (size_t i{0}; i < tree.size(); ++i) {
+    Node* n{tree.find_node_at_index(i)};
+    if (n->is_root()) {
+      continue;
+    }
+    tree.splay(n);
+    cout << "After splaying at index " << i
+        << " (value: " << n->data << "):\n";
+    dump_tree(cout, tree);
+    CHECK(tree_equals_list(tree, list));
+  }
+}
