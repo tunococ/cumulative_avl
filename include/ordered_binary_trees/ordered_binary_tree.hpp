@@ -1018,8 +1018,8 @@ struct OrderedBinaryTree {
      *  These are nodes whose data might need to be updated before updating
      *    `this`.
      *  Node that the former `parent->parent` may become a child of the former
-     *    `parent`, so it is safer to update the `first` component of the
-     *    return value before `second`.
+     *    `parent`, but the converse is not possible, so it is safer to always
+     *    update the `first` component of the return value before `second`.
      */
     constexpr std::pair<Node*, Node*> splay_2() {
       ASSERT(parent);
@@ -1130,6 +1130,11 @@ struct OrderedBinaryTree {
       f(this);
     }
 
+    /**
+     *  @brief
+     *  Overload of `splay()` that supplies `update_node_size` as the update
+     *    function.
+     */
     constexpr void splay() {
       splay(Node::update_node_size);
     }
@@ -1289,6 +1294,11 @@ struct OrderedBinaryTree {
     }
   }
 
+  /**
+   *  @brief
+   *  Unlinks a node at a given index from the tree.
+   *  The node to unlink may be non-leaf.
+   */
   template<bool update_sizes = true>
   constexpr Node* unlink_at_index(size_type index) {
     ASSERT(root);
@@ -1441,6 +1451,13 @@ struct OrderedBinaryTree {
     Node::delete_nodes(root);
   }
 
+  /**
+   *  @brief
+   *  Rotates a node to the left.
+   *
+   *  @note
+   *  This may change `root`.
+   */
   constexpr void rotate_left(Node* n) {
     n->rotate_left();
     if (n == root) {
@@ -1448,6 +1465,13 @@ struct OrderedBinaryTree {
     }
   }
 
+  /**
+   *  @brief
+   *  Rotates a node to the right.
+   *
+   *  @note
+   *  This may change `root`.
+   */
   constexpr void rotate_right(Node* n) {
     n->rotate_right();
     if (n == root) {
@@ -1455,6 +1479,14 @@ struct OrderedBinaryTree {
     }
   }
 
+  /**
+   *  @brief
+   *  Splays a node to the root and calls `f(n)` for each node `n` that is
+   *    affected by splaying.
+   *
+   *  @note
+   *  This usually changes `root`.
+   */
   template<class FunctionType>
   constexpr void splay(Node* n, FunctionType f) {
     ASSERT(root);
@@ -1463,6 +1495,11 @@ struct OrderedBinaryTree {
     root = n;
   }
 
+  /**
+   *  @brief
+   *  Overload of `splay()` that supplies `update_node_size` as the *update*
+   *    function.
+   */
   constexpr void splay(Node* n) {
     splay(n, Node::update_node_size);
   }
