@@ -4,10 +4,12 @@
 #include <iostream>
 #include <iterator>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
 #include <ordered_binary_trees/ordered_binary_tree.hpp>
+#include <ordered_binary_trees/ordered_binary_tree_node.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -110,10 +112,10 @@ void dump_tree(std::ostream& os,
  *  @brief
  *  Calls `dump_tree(os, tree.root, width)`.
  */
-template<class DataT, class SizeT>
+template<class NodeT>
 void dump_tree(
     std::ostream& os,
-    obt::OrderedBinaryTree<DataT, SizeT> const& tree,
+    obt::OrderedBinaryTree<NodeT> const& tree,
     size_t width = 5) {
   dump_tree(os, tree.root, width);
 }
@@ -254,8 +256,8 @@ static constexpr Insertion test_insertions_3[]{
 using namespace std;
 
 TEST_CASE("OrderedBinaryTree -- insert nodes and iterate") {
-  using Tree = obt::OrderedBinaryTree<string>;
-  using Node = typename Tree::Node;
+  using Node = obt::OrderedBinaryTreeNode<string>;
+  using Tree = obt::OrderedBinaryTree<Node>;
 
   Tree tree;
   insert_to_tree(tree, test_insertions_1);
@@ -371,8 +373,8 @@ TEST_CASE("OrderedBinaryTree -- insert nodes and iterate") {
 }
 
 TEST_CASE("OrderedBinaryTree -- clone") {
-  using Tree = obt::OrderedBinaryTree<string>;
-  using Node = typename Tree::Node;
+  using Node = obt::OrderedBinaryTreeNode<string>;
+  using Tree = obt::OrderedBinaryTree<Node>;
 
   Tree tree;
   vector<string> list;
@@ -397,33 +399,9 @@ TEST_CASE("OrderedBinaryTree -- clone") {
   tree.delete_nodes();
 }
 
-TEST_CASE("OrderedBinaryTree -- swap") {
-  using Tree = obt::OrderedBinaryTree<string>;
-  using Node = typename Tree::Node;
-
-  Tree tree;
-  vector<string> list;
-
-  insert_to_tree(tree, test_insertions_1);
-  insert_to_list(list, test_insertions_1);
-
-  for (size_t i{0}; i < tree.size(); ++i) {
-    for (size_t j{0}; j < tree.size(); ++j) {
-      std::swap(list[i], list[j]);
-
-      Node* n_i{tree.find_node_at_index(i)};
-      Node* n_j{tree.find_node_at_index(j)};
-      tree.swap(n_i, n_j);
-
-      CHECK(tree_equals_list(tree, list));
-    }
-  }
-  tree.delete_nodes();
-}
-
 TEST_CASE("OrderedBinaryTree -- insert and remove subtrees") {
-  using Tree = obt::OrderedBinaryTree<string>;
-  using Node = typename Tree::Node;
+  using Node = obt::OrderedBinaryTreeNode<string>;
+  using Tree = obt::OrderedBinaryTree<Node>;
 
   Tree tree_1;
   vector<string> list_1;
@@ -474,8 +452,8 @@ TEST_CASE("OrderedBinaryTree -- insert and remove subtrees") {
 }
 
 TEST_CASE("OrderedBinaryTree -- rotate") {
-  using Tree = obt::OrderedBinaryTree<string>;
-  using Node = typename Tree::Node;
+  using Node = obt::OrderedBinaryTreeNode<string>;
+  using Tree = obt::OrderedBinaryTree<Node>;
 
   Tree tree;
   vector<string> list;
@@ -522,8 +500,8 @@ TEST_CASE("OrderedBinaryTree -- rotate") {
 }
 
 TEST_CASE("OrderedBinaryTree -- splay") {
-  using Tree = obt::OrderedBinaryTree<string>;
-  using Node = typename Tree::Node;
+  using Node = obt::OrderedBinaryTreeNode<string>;
+  using Tree = obt::OrderedBinaryTree<Node>;
 
   Tree tree;
   vector<string> list;
@@ -545,3 +523,68 @@ TEST_CASE("OrderedBinaryTree -- splay") {
     CHECK(tree_equals_list(tree, list));
   }
 }
+
+TEST_CASE("OrderedBinaryTree -- swap") {
+  using Node = obt::OrderedBinaryTreeNode<string>;
+  using Tree = obt::OrderedBinaryTree<Node>;
+
+  Tree tree;
+  vector<string> list;
+
+  insert_to_tree(tree, test_insertions_1);
+  insert_to_list(list, test_insertions_1);
+
+  for (size_t i{0}; i < tree.size(); ++i) {
+    for (size_t j{0}; j < tree.size(); ++j) {
+      std::swap(list[i], list[j]);
+
+      Node* n_i{tree.find_node_at_index(i)};
+      Node* n_j{tree.find_node_at_index(j)};
+      tree.swap(n_i, n_j);
+
+      CHECK(tree_equals_list(tree, list));
+    }
+  }
+  tree.delete_nodes();
+}
+
+TEST_CASE("OrderedBinaryTree -- erase") {
+  using Node = obt::OrderedBinaryTreeNode<string>;
+  using Tree = obt::OrderedBinaryTree<Node>;
+
+  Tree tree;
+  vector<string> list;
+
+  insert_to_tree(tree, test_insertions_1);
+  insert_to_list(list, test_insertions_1);
+
+  for (size_t step_size{0}; step_size + 1 < tree.size(); ++step_size) {
+    Tree tree_a{tree.clone()};
+    vector<string> list_a{list};
+
+    cout << "Starting tree:\n";
+    dump_tree(cout, tree_a);
+
+    size_t i{0};
+    for (; tree_a.size() > 0; i += step_size) {
+      size_t j{i % tree_a.size()};
+      cout << "Erase at index " << j
+          << " (data = " << tree_a.find_node_at_index(j)->data << "):\n";
+
+      if (step_size % 2 == 0) {
+        delete std::get<2>(tree_a.erase_at_index(j));
+      } else {
+        tree_a.delete_at_index(j);
+      }
+
+      list_a.erase(list_a.begin() + j);
+
+      dump_tree(cout, tree_a);
+      CHECK(tree_equals_list(tree_a, list_a));
+    }
+
+    tree_a.delete_nodes();
+  }
+  tree.delete_nodes();
+}
+
