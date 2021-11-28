@@ -22,7 +22,9 @@ target_include_directories(ordered_binary_trees PUBLIC
 target_sources(ordered_binary_trees PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include/ordered_binary_trees/assert.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/ordered_binary_trees/ordered_binary_tree.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/ordered_binary_trees/ordered_binary_tree_list.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/ordered_binary_trees/ordered_binary_tree_node.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/ordered_binary_trees/splay_list.hpp"
 )
 
 if(NOT_SUBPROJECT)

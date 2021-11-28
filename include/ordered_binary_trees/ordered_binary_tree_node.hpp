@@ -15,21 +15,29 @@ namespace ordered_binary_trees {
  *  @brief
  *  Basic type of nodes in an ordered binary tree.
  */
-template<class DataT, class SizeT = std::size_t>
+template<
+    class DataT,
+    template<class> class AddPointerT = std::add_pointer,
+    class SizeT = std::size_t>
 struct OrderedBinaryTreeNode {
   /// This type.
-  using This = OrderedBinaryTreeNode<DataT, SizeT>;
-  /// Same as `Tree::Data`.
+  using This = OrderedBinaryTreeNode<DataT, AddPointerT, SizeT>;
+  /// `DataT`.
   using Data = DataT;
-  /// Same as `Tree::size_type`.
+  /// `SizeT`.
   using size_type = SizeT;
+  
+  using ThisPtr = typename AddPointerT<This>::type;
+  using ConstThisPtr = typename AddPointerT<This const>::type;
+  template<bool constant>
+  using CondThisPtr = std::conditional_t<constant, ConstThisPtr, ThisPtr>;
 
   /// Left child. May be null.
-  This* left_child{nullptr};
+  ThisPtr left_child{nullptr};
   /// Right child. May be null.
-  This* right_child{nullptr};
+  ThisPtr right_child{nullptr};
   /// Parent. May be null.
-  This* parent;
+  ThisPtr parent{nullptr};
   /**
    *  @brief
    *  Size of the subtree rooted at this node.
@@ -60,6 +68,11 @@ struct OrderedBinaryTreeNode {
    *  Location of a prospective new node.
    */
   struct InsertPosition {
+    /// Parent of the prospective new node. May be null if the tree is empty.
+    ThisPtr node;
+    /// Whether the prospective new node will be a left child of `node`.
+    bool left_child;
+
     /**
      *  @brief
      *  Creates a position for a new root node.
@@ -78,37 +91,19 @@ struct OrderedBinaryTreeNode {
      *  If `left_child` is `true`, `node->left_child` should be null.
      *  Otherwise, `node->right_child` should be null.
      */
-    constexpr InsertPosition(This* node, bool left_child)
+    constexpr InsertPosition(ThisPtr node, bool left_child)
       : node{node}, left_child{left_child} {
     }
-
-    /// Parent of the prospective new node. May be null if the tree is empty.
-    This* node;
-    /// Whether the prospective new node will be a left child of `node`.
-    bool left_child;
   };
 
   /**
    *  @brief
-   *  Creates a node with a given `parent` and initializes `data` from `args`.
+   *  Creates a node and initializes `data` from `args`.
    */
   template<class... Args>
-  constexpr OrderedBinaryTreeNode(This* parent, Args&&... args)
-    : parent{parent},
-      data(std::forward<Args>(args)...) {}
+  constexpr OrderedBinaryTreeNode(Args&&... args)
+    : data(std::forward<Args>(args)...) {}
   
-  /**
-   *  @brief
-   *  Constructs a disconnected node with `data` initialized from `args`.
-   *
-   *  This is a convenience function that simply calls the constructor with
-   *    `parent` set to `nullptr`.
-   */
-  template<class... Args>
-  static constexpr This* with_data(Args&&... args) {
-    return new This(nullptr, std::forward<Args>(args)...);
-  }
-
   /**
    *  @brief
    *  Returns the `ChildType` of this node.
@@ -141,8 +136,23 @@ struct OrderedBinaryTreeNode {
    *  Returns the `size` of node `n`.
    *  `n` may be null, in which case the return value will be `0`.
    */
-  static constexpr size_type get_size(This* n) {
+  static constexpr size_type get_size(ThisPtr n) {
     return n ? n->size : 0;
+  }
+
+  /**
+   *  @brief
+   *  Returns `true` if `this` node is a descendant of `a`.
+   */
+  constexpr bool is_under(ConstThisPtr a) const {
+    ConstThisPtr n{this};
+    while (n != a) {
+      if (!n) {
+        return false;
+      }
+      n = n->parent;
+    }
+    return true;
   }
 
   /**
@@ -153,10 +163,9 @@ struct OrderedBinaryTreeNode {
    *    `f()` returns `true`.
    */
   template<bool constant, class FunctionType>
-  static constexpr std::conditional_t<constant, This const, This>*
-      traverse_upwards(
-        std::conditional_t<constant, This const, This>* n,
-        FunctionType f) {
+  static constexpr CondThisPtr<constant> traverse_upwards(
+      CondThisPtr<constant> n,
+      FunctionType f) {
     ASSERT(n);
     if (!f(n)) {
       return nullptr;
@@ -175,7 +184,7 @@ struct OrderedBinaryTreeNode {
    *  Calls `traverse_upwards(this, f)`.
    */
   template<class FunctionType>
-  constexpr This* traverse_upwards(FunctionType f) {
+  constexpr ThisPtr traverse_upwards(FunctionType f) {
     return traverse_upwards<false, FunctionType>(this, f);
   }
 
@@ -184,7 +193,7 @@ struct OrderedBinaryTreeNode {
    *  Calls `traverse_upwards(this, f)`.
    */
   template<class FunctionType>
-  constexpr This const* traverse_upwards(FunctionType f) const {
+  constexpr ConstThisPtr traverse_upwards(FunctionType f) const {
     return traverse_upwards<true, FunctionType>(this, f);
   }
 
@@ -210,7 +219,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Static version of `update_size()`.
    */
-  static constexpr bool update_node_size(This* n) {
+  static constexpr bool update_node_size(ThisPtr n) {
     return n->update_size();
   }
 
@@ -219,7 +228,7 @@ struct OrderedBinaryTreeNode {
    *  Calls `traverse_upwards()` with `update_node_size()` as the unary
    *    function.
    */
-  constexpr This* update_sizes_upwards() {
+  constexpr ThisPtr update_sizes_upwards() {
     return traverse_upwards(update_node_size);
   }
 
@@ -227,7 +236,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Static version of `update_sizes_upwards()`.
    */
-  static constexpr This* update_node_sizes_upwards(This* n) {
+  static constexpr ThisPtr update_node_sizes_upwards(ThisPtr n) {
     return n->update_sizes_upwards();
   }
 
@@ -237,11 +246,11 @@ struct OrderedBinaryTreeNode {
    *    `n`.
    *  The nodes are ordered according to the depth-first in-order.
    * 
-   *  `f` should be a unary operator that takes one argument of type `This*`.
+   *  `f` should be a unary operator that takes one argument of type `ThisPtr`.
    */
   template<bool constant, class FunctionType>
   static constexpr void traverse_inorder(
-      std::conditional_t<constant, This const, This>* n,
+      CondThisPtr<constant> n,
       FunctionType f) {
     if (n) {
       traverse_inorder<constant, FunctionType>(n->left_child, f);
@@ -274,11 +283,11 @@ struct OrderedBinaryTreeNode {
    *    `n`.
    *  The nodes are ordered according to the depth-first post-order.
    * 
-   *  `f` should be a unary operator that takes one argument of type `This*`.
+   *  `f` should be a unary operator that takes one argument of type `ThisPtr`.
    */
   template<bool constant, class FunctionType>
   static constexpr void traverse_postorder(
-      std::conditional_t<constant, This const, This>* n,
+      CondThisPtr<constant> n,
       FunctionType f) {
     if (n) {
       traverse_postorder<constant, FunctionType>(n->left_child, f);
@@ -311,11 +320,11 @@ struct OrderedBinaryTreeNode {
    *    `n`.
    *  The nodes are ordered according to the depth-first pre-order.
    * 
-   *  `f` should be a unary operator that takes one argument of type `This*`.
+   *  `f` should be a unary operator that takes one argument of type `ThisPtr`.
    */
   template<bool constant, class FunctionType>
   static constexpr void traverse_preorder(
-      std::conditional_t<constant, This const, This>* n,
+      CondThisPtr<constant> n,
       FunctionType f) {
     if (n) {
       f(n);
@@ -344,41 +353,13 @@ struct OrderedBinaryTreeNode {
 
   /**
    *  @brief
-   *  Deletes all nodes under the subtree rooted at `n`.
-   */
-  static constexpr void delete_nodes(This* n) {
-    traverse_postorder<false>(n, [](This* n) { delete n; });
-  }
-
-  /**
-   *  @brief
-   *  Clones all nodes under the subtree rooted at `this` node.
-   */
-  constexpr This* clone() const {
-    This* n{This::with_data(data)};
-    n->size = size;
-    if (left_child) {
-      This* n_left_child{left_child->clone()};
-      n->left_child = n_left_child;
-      n_left_child->parent = n;
-    }
-    if (right_child) {
-      This* n_right_child{right_child->clone()};
-      n->right_child = n_right_child;
-      n_right_child->parent = n;
-    }
-    return n;
-  }
-
-  /**
-   *  @brief
    *  Returns the index of `this` node relative to the root.
    */
   constexpr size_type get_index() const {
     size_type index{get_size(left_child)};
-    This const* n{this};
+    ConstThisPtr n{this};
     while (true) {
-      This const* p{n->parent};
+      ConstThisPtr p{n->parent};
       if (!p) {
         return index;
       }
@@ -394,10 +375,9 @@ struct OrderedBinaryTreeNode {
    *  Finds a node at a given integer `index` in a subtree rooted at `n`.
    */
   template<bool constant>
-  static constexpr std::conditional_t<constant, This const, This>*
-      find_node_at_index(
-        std::conditional_t<constant, This const, This>* n,
-        size_type index) {
+  static constexpr CondThisPtr<constant> find_node_at_index(
+      CondThisPtr<constant> n,
+      size_type index) {
     if (!n) {
       return nullptr;
     }
@@ -426,7 +406,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Calls `find_note_at_index(this, index)`.
    */
-  constexpr This* find_node_at_index(size_type index) {
+  constexpr ThisPtr find_node_at_index(size_type index) {
     return find_node_at_index<false>(this, index);
   }
 
@@ -434,7 +414,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Calls `find_note_at_index(this, index)`.
    */
-  constexpr This const* find_node_at_index(size_type index) const {
+  constexpr ConstThisPtr find_node_at_index(size_type index) const {
     return find_node_at_index<true>(this, index);
   }
 
@@ -443,8 +423,8 @@ struct OrderedBinaryTreeNode {
    *  Finds the leftmost node in the subtree rooted at `n`.
    */
   template<bool constant>
-  static constexpr std::conditional_t<constant, This const, This>*
-      find_first_node(std::conditional_t<constant, This const, This>* n) {
+  static constexpr CondThisPtr<constant> find_first_node(
+      CondThisPtr<constant> n) {
     ASSERT(n);
     for (; n->left_child; n = n->left_child) {}
     return n;
@@ -454,7 +434,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Calls `find_first_node(this)`.
    */
-  constexpr This* find_first_node() {
+  constexpr ThisPtr find_first_node() {
     return find_first_node<false>(this);
   }
 
@@ -462,7 +442,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Calls `find_first_node(this)`.
    */
-  constexpr This const* find_first_node() const {
+  constexpr ConstThisPtr find_first_node() const {
     return find_first_node<true>(this);
   }
 
@@ -471,8 +451,8 @@ struct OrderedBinaryTreeNode {
    *  Finds the node that would succeed `n` in an in-order traversal.
    */
   template<bool constant>
-  static constexpr std::conditional_t<constant, This const, This>*
-      find_next_node(std::conditional_t<constant, This const, This>* n) {
+  static constexpr CondThisPtr<constant> find_next_node(
+      CondThisPtr<constant> n) {
     ASSERT(n);
     if (n->right_child) {
       return n->right_child->find_first_node();
@@ -494,7 +474,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Calls `find_next_node(this)`.
    */
-  constexpr This* find_next_node() {
+  constexpr ThisPtr find_next_node() {
     return find_next_node<false>(this);
   }
 
@@ -502,7 +482,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Calls `find_next_node(this)`.
    */
-  constexpr This const* find_next_node() const {
+  constexpr ConstThisPtr find_next_node() const {
     return find_next_node<true>(this);
   }
 
@@ -512,10 +492,9 @@ struct OrderedBinaryTreeNode {
    *    traversal.
    */
   template<bool constant>
-  static constexpr std::conditional_t<constant, This const, This>*
-      find_next_node(
-        std::conditional_t<constant, This const, This>* n,
-        size_type steps) {
+  static constexpr CondThisPtr<constant> find_next_node(
+      CondThisPtr<constant> n,
+      size_type steps) {
     ASSERT(n);
     while (true) {
       if (steps == 0) {
@@ -563,7 +542,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Calls `find_next_node(this, steps)`.
    */
-  constexpr This* find_next_node(size_type steps) {
+  constexpr ThisPtr find_next_node(size_type steps) {
     return find_next_node<false>(this, steps);
   }
 
@@ -571,7 +550,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Calls `find_next_node(this, steps)`.
    */
-  constexpr This const* find_next_node(size_type steps) const {
+  constexpr ConstThisPtr find_next_node(size_type steps) const {
     return find_next_node<true>(this, steps);
   }
 
@@ -580,8 +559,8 @@ struct OrderedBinaryTreeNode {
    *  Finds the rightmost node in the subtree rooted at `n`.
    */
   template<bool constant>
-  static constexpr std::conditional_t<constant, This const, This>*
-      find_last_node(std::conditional_t<constant, This const, This>* n) {
+  static constexpr CondThisPtr<constant> find_last_node(
+      CondThisPtr<constant> n) {
     ASSERT(n);
     for (; n->right_child; n = n->right_child) {}
     return n;
@@ -591,7 +570,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Calls `find_last_node(this)`.
    */
-  constexpr This* find_last_node() {
+  constexpr ThisPtr find_last_node() {
     return find_last_node<false>(this);
   }
 
@@ -599,7 +578,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Calls `find_last_node(this)`.
    */
-  constexpr This const* find_last_node() const {
+  constexpr ConstThisPtr find_last_node() const {
     return find_last_node<true>(this);
   }
 
@@ -608,8 +587,8 @@ struct OrderedBinaryTreeNode {
    *  Finds the node that would precede `n` in an in-order traversal.
    */
   template<bool constant>
-  static constexpr std::conditional_t<constant, This const, This>*
-      find_prev_node(std::conditional_t<constant, This const, This>* n) {
+  static constexpr CondThisPtr<constant> find_prev_node(
+      CondThisPtr<constant> n) {
     ASSERT(n);
     if (n->left_child) {
       return n->left_child->find_last_node();
@@ -631,7 +610,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Calls `find_prev_node(this)`.
    */
-  constexpr This* find_prev_node() {
+  constexpr ThisPtr find_prev_node() {
     return find_prev_node<false>(this);
   }
 
@@ -639,7 +618,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Calls `find_prev_node(this)`.
    */
-  constexpr This const* find_prev_node() const {
+  constexpr ConstThisPtr find_prev_node() const {
     return find_prev_node<true>(this);
   }
 
@@ -649,10 +628,9 @@ struct OrderedBinaryTreeNode {
    *    in-order traversal.
    */
   template<bool constant>
-  static constexpr std::conditional_t<constant, This const, This>*
-      find_prev_node(
-        std::conditional_t<constant, This const, This>* n,
-        size_type steps) {
+  static constexpr CondThisPtr<constant> find_prev_node(
+      CondThisPtr<constant> n,
+      size_type steps) {
     ASSERT(n);
     while (true) {
       if (steps == 0) {
@@ -700,7 +678,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Calls `find_prev_node(this, steps)`.
    */
-  constexpr This* find_prev_node(size_type steps) {
+  constexpr ThisPtr find_prev_node(size_type steps) {
     return find_prev_node<false>(this, steps);
   }
 
@@ -708,7 +686,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Calls `find_prev_node(this, steps)`.
    */
-  constexpr This const* find_prev_node(size_type steps) const {
+  constexpr ConstThisPtr find_prev_node(size_type steps) const {
     return find_prev_node<true>(this, steps);
   }
 
@@ -735,9 +713,9 @@ struct OrderedBinaryTreeNode {
    *    be the index of that node.
    */
   constexpr InsertPosition find_insert_position_for_index(size_type index) {
-    This* n{this};
+    ThisPtr n{this};
     while (true) {
-      This* l{n->left_child};
+      ThisPtr l{n->left_child};
       if (l) {
         if (index <= l->size) {
           n = l;
@@ -749,7 +727,7 @@ struct OrderedBinaryTreeNode {
       } else {
         --index;
       }
-      This* r{n->right_child};
+      ThisPtr r{n->right_child};
       if (r) {
         n = r;
       } else {
@@ -771,7 +749,7 @@ struct OrderedBinaryTreeNode {
   template<bool update_sizes = true>
   constexpr void link(InsertPosition const& pos) {
     ASSERT(pos.node);
-    This* p{pos.node};
+    ThisPtr p{pos.node};
     if (pos.left_child) {
       ASSERT(!p->left_child);
       p->left_child = this;
@@ -796,7 +774,7 @@ struct OrderedBinaryTreeNode {
    *  This function assumes that `n` has the correct size.
    */
   template<bool update_sizes = true>
-  constexpr void insert_at_index(size_type index, This* n) {
+  constexpr void insert_at_index(size_type index, ThisPtr n) {
     ASSERT(n);
     n->template link<update_sizes>(find_insert_position_for_index(index));
   }
@@ -807,8 +785,8 @@ struct OrderedBinaryTreeNode {
    *    the subtree rooted at `this`, and returns the pointer to it.
    */
   template<bool update_sizes = true, class... Args>
-  constexpr This* emplace_at_index(size_type index, Args&&... args) {
-    This* n{new This(nullptr, std::forward<Args>(args)...)};
+  constexpr ThisPtr emplace_at_index(size_type index, Args&&... args) {
+    ThisPtr n{new This(nullptr, std::forward<Args>(args)...)};
     insert_at_index<update_sizes>(index, n);
     return n;
   }
@@ -816,7 +794,7 @@ struct OrderedBinaryTreeNode {
   /**
    *  @brief
    *  Unlinks `this` node from its parent and returns `InsertPosition` for
-   *    the position where the node was.
+   *    the position where the node used to be.
    *
    *  If `this` node doesn't have a parent, this function does nothing, and the
    *    return value will be `InsertPosition` with null `node`.
@@ -849,15 +827,17 @@ struct OrderedBinaryTreeNode {
 
   /**
    *  @brief
-   *  Unlinks a node at a given index in the subtree rooted at `this`, then
-   *    returns the node that was unlinked.
+   *  Unlinks a node at a given index in the subtree rooted at `this` from its
+   *    parent, then returns the node and `InsertPosition` for the position
+   *    where the node used to be.
    */
   template<bool update_sizes = true>
-  constexpr This* unlink_at_index(size_type index) {
-    This* n{find_node_at_index(index)};
+  constexpr std::pair<ThisPtr, InsertPosition> unlink_at_index(
+      size_type index) {
+    ThisPtr n{find_node_at_index(index)};
     ASSERT(n);
-    n->template unlink<update_sizes>();
-    return n;
+    InsertPosition pos{n->template unlink<update_sizes>()};
+    return {n, pos};
   }
 
   /**
@@ -875,11 +855,11 @@ struct OrderedBinaryTreeNode {
    */
   constexpr void rotate_left() {
     ASSERT(right_child);
-    This* p{parent};
+    ThisPtr p{parent};
     ChildType child_type{get_child_type()};
 
-    This* r{right_child};
-    This* rl{r->left_child};
+    ThisPtr r{right_child};
+    ThisPtr rl{r->left_child};
 
     right_child = rl;
     if (rl) {
@@ -911,11 +891,11 @@ struct OrderedBinaryTreeNode {
    */
   constexpr void rotate_right() {
     ASSERT(left_child);
-    This* p{parent};
+    ThisPtr p{parent};
     ChildType child_type{get_child_type()};
 
-    This* r{left_child};
-    This* rl{r->right_child};
+    ThisPtr r{left_child};
+    ThisPtr rl{r->right_child};
 
     left_child = rl;
     if (rl) {
@@ -945,9 +925,9 @@ struct OrderedBinaryTreeNode {
    *  This is the node whose data might need to be updated before updating
    *    `this`.
    */
-  constexpr This* splay_1() {
+  constexpr ThisPtr splay_1() {
     ASSERT(parent);
-    This* p{parent};
+    ThisPtr p{parent};
     ChildType child_type{get_child_type()};
     if (child_type == kLeftChild) {
       parent->rotate_right();
@@ -974,19 +954,19 @@ struct OrderedBinaryTreeNode {
    *    `parent`, but the converse is not possible, so it is safer to always
    *    update the `first` component of the return value before `second`.
    */
-  constexpr std::pair<This*, This*> splay_2() {
+  constexpr std::pair<ThisPtr, ThisPtr> splay_2() {
     ASSERT(parent);
     ASSERT(parent->parent);
-    This* p{parent};
-    This* pp{p->parent};
-    This* ppp{pp->parent};
+    ThisPtr p{parent};
+    ThisPtr pp{p->parent};
+    ThisPtr ppp{pp->parent};
     ChildType child_type{get_child_type()};
     ChildType p_child_type{p->get_child_type()};
     ChildType pp_child_type{pp->get_child_type()};
     if (p_child_type == kLeftChild) {
       if (child_type == kLeftChild) {
         // left-left zig-zig
-        This* s{p->right_child}; // s = sibling
+        ThisPtr s{p->right_child}; // s = sibling
         pp->left_child = s;
         if (s) {
           s->parent = pp;
@@ -1001,8 +981,8 @@ struct OrderedBinaryTreeNode {
         p->parent = this;
       } else {
         // left-right zig-zag
-        This* left{left_child};
-        This* right{right_child};
+        ThisPtr left{left_child};
+        ThisPtr right{right_child};
         p->right_child = left;
         if (left) {
           left->parent = p;
@@ -1018,8 +998,8 @@ struct OrderedBinaryTreeNode {
       }
     } else if (child_type == kLeftChild) {
       // right-left zig-zag
-      This* left{left_child};
-      This* right{right_child};
+      ThisPtr left{left_child};
+      ThisPtr right{right_child};
       p->left_child = right;
       if (right) {
         right->parent = p;
@@ -1034,7 +1014,7 @@ struct OrderedBinaryTreeNode {
       pp->parent = this;
     } else {
       // right-right zig-zig
-      This* s{p->left_child};
+      ThisPtr s{p->left_child};
       pp->right_child = s;
       if (s) {
         s->parent = pp;
@@ -1065,18 +1045,18 @@ struct OrderedBinaryTreeNode {
    * 
    *  The function `f` for *updating* node data along the way can be
    *    customized.
-   *  `f` should take one argument of type `This*`.
+   *  `f` should take one argument of type `ThisPtr`.
    *  The return value of `f` is not used.
    */
   template<class FunctionType>
   constexpr void splay(FunctionType f) {
     while (parent) {
       if (parent->parent) {
-        std::pair<This*, This*> pp_p{splay_2()};
+        std::pair<ThisPtr, ThisPtr> pp_p{splay_2()};
         f(pp_p.first);
         f(pp_p.second);
       } else {
-        This* p{splay_1()};
+        ThisPtr p{splay_1()};
         f(p);
       }
     }
@@ -1094,7 +1074,7 @@ struct OrderedBinaryTreeNode {
     if constexpr (update_sizes) {
       splay(This::update_node_size);
     } else {
-      splay([](This*) {});
+      splay([](ThisPtr) {});
     }
   }
 
@@ -1106,7 +1086,7 @@ struct OrderedBinaryTreeNode {
    *  This function can be used to virtually swap node's `data` without
    *    actually moving `data`.
    */
-  constexpr void swap(This* n) {
+  constexpr void swap(ThisPtr n) {
     ASSERT(n);
     std::swap(size, n->size);
     ChildType child_type{get_child_type()};
@@ -1173,7 +1153,7 @@ struct OrderedBinaryTreeNode {
    *    the return value will be null.
    */
   template<bool update_sizes = true>
-  constexpr std::pair<This*, This*> erase() {
+  constexpr std::pair<ThisPtr, ThisPtr> erase() {
     if (!left_child) {
       ChildType child_type{get_child_type()};
       if (child_type == kLeftChild) {
@@ -1206,7 +1186,7 @@ struct OrderedBinaryTreeNode {
       return {left_child, parent};
     }
 
-    This* next{find_next_node()};
+    ThisPtr next{find_next_node()};
     ASSERT(next);
     swap(next);
     ASSERT(parent);
@@ -1224,6 +1204,25 @@ struct OrderedBinaryTreeNode {
       parent->update_sizes_upwards();
     }
     return {next, parent};
+  }
+
+  /**
+   *  @brief
+   *  Erases a node at a given index in a subtree rooted at `this` node.
+   *
+   *  This function essentially calls `find_node_at_index(index)->erase()` and
+   *    returns all the values during the operation.
+   *
+   *  The return value has three components:
+   *  - [0]: the node at the given index prior to calling this function.
+   *  - [1]: the first component of the return value of `erase()`.
+   *  - [2]: the second component of the return value of `erase()`.
+   */
+  template<bool update_sizes = true>
+  constexpr std::tuple<ThisPtr, ThisPtr, ThisPtr> erase_at_index(size_type index) {
+    ThisPtr n{find_node_at_index(index)};
+    std::pair<ThisPtr, ThisPtr> erase_result{n->erase()};
+    return {n, erase_result.first, erase_result.second};
   }
 
 };

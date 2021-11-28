@@ -190,7 +190,7 @@ bool tree_equals_list(Tree const& tree, List const& list) {
   }
   using Node = typename Tree::Node;
   size_t i{0};
-  Node const* n{tree.find_first_node()};
+  Node const* n{tree.first};
   while (n && i < list.size()) {
     if (list[i] != n->data) {
       return false;
@@ -198,7 +198,18 @@ bool tree_equals_list(Tree const& tree, List const& list) {
     n = n->find_next_node();
     ++i;
   }
-  return i == list.size();
+  if (i != list.size()) {
+    return false;
+  }
+  n = tree.last;
+  while (n && i > 0) {
+    --i;
+    if (list[i] != n->data) {
+      return false;
+    }
+    n = n->find_prev_node();
+  }
+  return i == 0;
 }
 
 static constexpr Insertion test_insertions_1[]{
@@ -317,18 +328,10 @@ TEST_CASE("OrderedBinaryTree -- insert nodes and iterate") {
     cout << endl;
   }
 
-  SECTION("find_next_node") {
-    cout << "Iterating through nodes with find_next_node():\n  ";
-    vector<string> inorder;
-    for (Node* n{tree.find_first_node()}; n; n = n->find_next_node()) {
-      inorder.push_back(n->data);
-      cout << n->data << " ";
-    }
-    cout << endl;
-
-    CHECK(equal(
-        inorder_golden.begin(), inorder_golden.end(),
-        inorder.begin(), inorder.end()));
+  SECTION("find_next_node and find_prev_node") {
+    cout << "Iterating through nodes with "
+        "find_next_node() and find_prev_node()...\n";
+    CHECK(tree_equals_list(tree, inorder_golden));
   }
 
   SECTION("find_next_node(steps)") {
@@ -343,20 +346,6 @@ TEST_CASE("OrderedBinaryTree -- insert nodes and iterate") {
     }
   }
 
-  SECTION("find_prev_node") {
-    cout << "Iterating through nodes backwards with find_prev_node():\n  ";
-    vector<string> inorder;
-    for (Node* n{tree.find_last_node()}; n; n = n->find_prev_node()) {
-      inorder.push_back(n->data);
-      cout << n->data << " ";
-    }
-    cout << endl;
-
-    CHECK(equal(
-        inorder_golden.begin(), inorder_golden.end(),
-        inorder.rbegin(), inorder.rend()));
-  }
-
   SECTION("find_prev_node(steps)") {
     for (size_t i{0}; i < tree.size(); ++i) {
       Node* n_i{tree.find_node_at_index(i)};
@@ -369,7 +358,7 @@ TEST_CASE("OrderedBinaryTree -- insert nodes and iterate") {
     }
   }
 
-  tree.delete_nodes();
+  tree.destroy_all_nodes();
 }
 
 TEST_CASE("OrderedBinaryTree -- clone") {
@@ -393,10 +382,10 @@ TEST_CASE("OrderedBinaryTree -- clone") {
       CHECK(!tree_equals_list(cloned_tree, list));
       CHECK(!tree_equals_list(tree, cloned_list));
 
-      cloned_tree.delete_nodes();
+      cloned_tree.destroy_all_nodes();
     }
   }
-  tree.delete_nodes();
+  tree.destroy_all_nodes();
 }
 
 TEST_CASE("OrderedBinaryTree -- insert and remove subtrees") {
@@ -408,47 +397,77 @@ TEST_CASE("OrderedBinaryTree -- insert and remove subtrees") {
   insert_to_tree(tree_1, test_insertions_2);
   insert_to_list(list_1, test_insertions_2);
 
-  Tree tree_2;
-  vector<string> list_2;
-  insert_to_tree(tree_2, test_insertions_3);
-  insert_to_list(list_2, test_insertions_3);
+  SECTION("insert and unlink") {
+    Tree tree_2;
+    vector<string> list_2;
+    insert_to_tree(tree_2, test_insertions_3);
+    insert_to_list(list_2, test_insertions_3);
 
-  cout << "tree_1:\n";
-  dump_tree(cout, tree_1);
-  cout << "tree_2:\n";
-  dump_tree(cout, tree_2);
+    cout << "tree_1:\n";
+    dump_tree(cout, tree_1);
+    cout << "tree_2:\n";
+    dump_tree(cout, tree_2);
 
-  for (size_t i{0}; i <= tree_1.size(); ++i) {
-    Tree tree_a{tree_1.clone()};
-    Tree tree_b{tree_2.clone()};
-    tree_a.insert_at_index(i, tree_b.root);
+    for (size_t i{0}; i <= tree_1.size(); ++i) {
+      Tree tree_a{tree_1.clone()};
+      Tree tree_b{tree_2.clone()};
+      tree_a.insert_at_index(i, tree_b.root);
 
-    cout << "Joined tree_2 to tree_1 at index " << i << ":\n";
-    dump_tree(cout, tree_a);
+      cout << "Joined tree_2 to tree_1 at index " << i << ":\n";
+      dump_tree(cout, tree_a);
 
-    vector<string> list_a{list_1};
-    list_a.insert(
-        std::next(list_a.begin(), i),
-        list_2.begin(), list_2.end());
-    
-    CHECK(tree_equals_list(tree_a, list_a));
+      vector<string> list_a{list_1};
+      list_a.insert(
+          std::next(list_a.begin(), i),
+          list_2.begin(), list_2.end());
+      
+      CHECK(tree_equals_list(tree_a, list_a));
 
-    if (i > 0) {
-      // If the subtree was joined at index > 0, removing the subtree at index
-      //   `i` would reverse the insert operation.
-      Tree tree_c{tree_1.unlink_at_index(i)};
-      CHECK(tree_equals_list(tree_c, list_2));
-      tree_c.delete_nodes();
+      if (i > 0) {
+        // If the subtree was joined at index > 0, removing the subtree at index
+        //   `i` would reverse the insert operation.
+        Tree tree_c{tree_1.splice_at_index(i).first};
+        CHECK(tree_equals_list(tree_c, list_2));
+        tree_c.destroy_all_nodes();
 
-      CHECK(tree_equals_list(tree_a, list_1));
+        CHECK(tree_equals_list(tree_a, list_1));
+      }
+
+      tree_a.destroy_all_nodes();
+      break;
     }
 
-    tree_a.delete_nodes();
-    break;
+    tree_2.destroy_all_nodes();
   }
 
-  tree_2.delete_nodes();
-  tree_1.delete_nodes();
+  SECTION("splice and insert") {
+    for (size_t i{0}; i < tree_1.size(); ++i) {
+      Tree tree_a{tree_1.clone()};
+
+      cout << "Starting tree:\n";
+      dump_tree(cout, tree_a);
+
+      auto splice_result{tree_a.splice_at_index(i)};
+      Tree tree_b{std::move(splice_result.first)};
+      auto pos{splice_result.second};
+
+      cout << "After splicing at index " << i << " (data = " << tree_b.root->data << ")\n";
+      dump_tree(cout, tree_a);
+
+      cout << "Spliced tree:\n";
+      dump_tree(cout, tree_b);
+
+      CHECK(tree_a.size() + tree_b.size() == tree_1.size());
+
+      tree_a.link(pos, tree_b.root);
+
+      CHECK(tree_equals_list(tree_a, list_1));
+
+      tree_a.destroy_all_nodes();
+    }
+  }
+
+  tree_1.destroy_all_nodes();
 }
 
 TEST_CASE("OrderedBinaryTree -- rotate") {
@@ -545,7 +564,7 @@ TEST_CASE("OrderedBinaryTree -- swap") {
       CHECK(tree_equals_list(tree, list));
     }
   }
-  tree.delete_nodes();
+  tree.destroy_all_nodes();
 }
 
 TEST_CASE("OrderedBinaryTree -- erase") {
@@ -583,8 +602,8 @@ TEST_CASE("OrderedBinaryTree -- erase") {
       CHECK(tree_equals_list(tree_a, list_a));
     }
 
-    tree_a.delete_nodes();
+    tree_a.destroy_all_nodes();
   }
-  tree.delete_nodes();
+  tree.destroy_all_nodes();
 }
 
