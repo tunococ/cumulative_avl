@@ -10,6 +10,7 @@
 
 #include <ordered_binary_trees/ordered_binary_tree.hpp>
 #include <ordered_binary_trees/ordered_binary_tree_node.hpp>
+#include <ordered_binary_trees/ordered_binary_tree_iterator.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -411,10 +412,12 @@ TEST_CASE("OrderedBinaryTree -- insert and remove subtrees") {
     for (size_t i{0}; i <= tree_1.size(); ++i) {
       Tree tree_a{tree_1.clone()};
       Tree tree_b{tree_2.clone()};
-      tree_a.insert_at_index(i, tree_b.root);
+      tree_a.link_subtree_at_index(i, std::move(tree_b));
 
       cout << "Joined tree_2 to tree_1 at index " << i << ":\n";
       dump_tree(cout, tree_a);
+
+      CHECK(tree_b.empty());
 
       vector<string> list_a{list_1};
       list_a.insert(
@@ -426,7 +429,7 @@ TEST_CASE("OrderedBinaryTree -- insert and remove subtrees") {
       if (i > 0) {
         // If the subtree was joined at index > 0, removing the subtree at index
         //   `i` would reverse the insert operation.
-        Tree tree_c{tree_1.splice_at_index(i).first};
+        Tree tree_c{tree_1.unlink_subtree_at_index(i).first};
         CHECK(tree_equals_list(tree_c, list_2));
         tree_c.destroy_all_nodes();
 
@@ -440,26 +443,29 @@ TEST_CASE("OrderedBinaryTree -- insert and remove subtrees") {
     tree_2.destroy_all_nodes();
   }
 
-  SECTION("splice and insert") {
+  SECTION("unlink and insert") {
     for (size_t i{0}; i < tree_1.size(); ++i) {
       Tree tree_a{tree_1.clone()};
 
       cout << "Starting tree:\n";
       dump_tree(cout, tree_a);
 
-      auto splice_result{tree_a.splice_at_index(i)};
-      Tree tree_b{std::move(splice_result.first)};
-      auto pos{splice_result.second};
+      auto unlink_result{tree_a.unlink_subtree_at_index(i)};
+      Tree tree_b{std::move(unlink_result.first)};
+      auto pos{unlink_result.second};
 
-      cout << "After splicing at index " << i << " (data = " << tree_b.root->data << ")\n";
+      cout << "After unlinking at index " << i
+          << " (data = " << tree_b.root->data << ")\n";
       dump_tree(cout, tree_a);
 
-      cout << "Spliced tree:\n";
+      cout << "Unlinked subtree:\n";
       dump_tree(cout, tree_b);
 
       CHECK(tree_a.size() + tree_b.size() == tree_1.size());
 
-      tree_a.link(pos, tree_b.root);
+      tree_a.link_subtree(pos, std::move(tree_b));
+
+      CHECK(tree_b.empty());
 
       CHECK(tree_equals_list(tree_a, list_1));
 
@@ -607,3 +613,82 @@ TEST_CASE("OrderedBinaryTree -- erase") {
   tree.destroy_all_nodes();
 }
 
+TEST_CASE("OrderedBinaryTreeIterator") {
+  using Node = obt::OrderedBinaryTreeNode<string>;
+  using Tree = obt::OrderedBinaryTree<Node>;
+  using Iterator = obt::OrderedBinaryTreeIterator<Tree, false>;
+  using ConstIterator = obt::OrderedBinaryTreeIterator<Tree, true>;
+
+  Tree tree;
+  vector<string> list;
+
+  insert_to_tree(tree, test_insertions_1);
+  insert_to_list(list, test_insertions_1);
+
+  Iterator begin{&tree, tree.first};
+  Iterator end{&tree, nullptr};
+  ConstIterator cbegin{&tree, tree.first};
+  ConstIterator cend{&tree, nullptr};
+
+  SECTION("operator++") {
+    cout << "Tree:\n";
+    dump_tree(cout, tree);
+
+    cout << "Testing operator++ -- iterating forward:\n ";
+    for (auto i{cbegin}; i != cend; ++i) {
+      cout << " " << *i;
+    }
+    cout << "\n";
+    CHECK(std::equal(list.begin(), list.end(), begin, end));
+    CHECK(std::equal(list.cbegin(), list.cend(), cbegin, cend));
+  }
+
+  SECTION("operator--") {
+    cout << "Testing operator-- -- iterating backward:\n ";
+    for (auto i{cend}; i != cbegin;) {
+      --i;
+      cout << " " << *i;
+    }
+    cout << "\n";
+
+    auto rbegin{std::make_reverse_iterator(end)};
+    auto rend{std::make_reverse_iterator(begin)};
+    auto crbegin{std::make_reverse_iterator(cend)};
+    auto crend{std::make_reverse_iterator(cbegin)};
+    CHECK(std::equal(list.rbegin(), list.rend(), rbegin, rend));
+    CHECK(std::equal(list.crbegin(), list.crend(), crbegin, crend));
+  }
+
+  SECTION("operator+ and operator-") {
+    for (size_t i{0}; i <= tree.size(); ++i) {
+      auto it_i{begin + i};
+      CHECK(it_i == i + begin);
+      for (size_t j{0}; j <= tree.size(); ++j) {
+        auto it_j{begin + j};
+        ssize_t dist{static_cast<ssize_t>(j) - static_cast<ssize_t>(i)};
+
+        CHECK(it_i + dist == it_j);
+        CHECK(dist + it_i == it_j);
+        CHECK(it_i == it_j - dist);
+        CHECK(it_i == -dist + it_j);
+        if (i < tree.size()) {
+          CHECK(it_i[0] == list[i]);
+          CHECK(it_j[-dist] == *it_i);
+        }
+        if (j < tree.size()) {
+          CHECK(it_j[0] == list[j]);
+          CHECK(it_i[dist] == *it_j);
+        }
+
+        CHECK((i == j ? (it_i == it_j) : true));
+        CHECK((i != j ? (it_i != it_j) : true));
+        CHECK((i > j ? (it_i > it_j) : true));
+        CHECK((i >= j ? (it_i >= it_j) : true));
+        CHECK((i < j ? (it_i < it_j) : true));
+        CHECK((i <= j ? (it_i <= it_j) : true));
+      }
+    }
+  }
+
+  tree.destroy_all_nodes();
+}

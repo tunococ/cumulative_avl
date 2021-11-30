@@ -49,6 +49,13 @@ struct OrderedBinaryTree {
   /// `Node::InsertPosition`.
   using InsertPosition = typename Node::InsertPosition;
 
+  static_assert(std::is_same_v<
+      NodePtr,
+      typename std::allocator_traits<Allocator>::pointer>);
+  static_assert(std::is_same_v<
+      ConstNodePtr,
+      typename std::allocator_traits<Allocator>::const_pointer>);
+  
   /**
    *  @brief
    *  Root of the tree. This is null when the tree is empty.
@@ -78,12 +85,19 @@ struct OrderedBinaryTree {
    *  Creates a binary tree with a given root.
    */
   constexpr OrderedBinaryTree(
-      NodePtr root = nullptr,
+      NodePtr root,
       Allocator allocator = Allocator())
     : root{root},
       first{root ? root->find_first_node() : nullptr},
       last{root ? root->find_last_node() : nullptr},
       allocator{allocator} {}
+  
+  /**
+   *  @brief
+   *  Creates an empty tree.
+   */
+  constexpr OrderedBinaryTree(Allocator allocator = Allocator())
+    : allocator{allocator} {}
 
   /**
    *  @brief
@@ -92,20 +106,27 @@ struct OrderedBinaryTree {
    *  This copy constructor is useful only in a very special situation such as
    *    when the source tree will be abandoned at a later time.
    */
-  constexpr OrderedBinaryTree(This const&) = default;
+  template<class OtherNode, class OtherAllocator>
+  constexpr OrderedBinaryTree(
+      OrderedBinaryTree<OtherNode, OtherAllocator> const& other)
+    : root{other.root},
+      first{other.first},
+      last{other.last},
+      allocator{other.allocator} {
+  }
 
   /**
    *  @brief
    *  Takes everything from another tree.
    */
-  constexpr OrderedBinaryTree(This&& other)
+  template<class OtherNode, class OtherAllocator>
+  constexpr OrderedBinaryTree(
+      OrderedBinaryTree<OtherNode, OtherAllocator>&& other)
     : root{other.root},
       first{other.first},
       last{other.last},
-      allocator{other.allocator} {
-    other.root = nullptr;
-    other.first = nullptr;
-    other.last = nullptr;
+      allocator{std::move(other.allocator)} {
+    other.reset();
   }
 
   /**
@@ -130,10 +151,7 @@ struct OrderedBinaryTree {
     root = other.root;
     first = other.first;
     last = other.last;
-    allocator = other.allocator;
-    other.root = nullptr;
-    other.first = nullptr;
-    other.last = nullptr;
+    other.reset();
     return *this;
   }
 
@@ -151,6 +169,26 @@ struct OrderedBinaryTree {
    */
   constexpr bool empty() const {
     return !root;
+  }
+
+  /**
+   *  @brief
+   *  Empties the tree.
+   */
+  constexpr void reset() {
+    root = nullptr;
+    first = nullptr;
+    last = nullptr;
+  }
+
+  /**
+   *  @brief
+   *  Gives up ownership of the root node.
+   */
+  constexpr NodePtr release() {
+    NodePtr r{root};
+    reset();
+    return r;
   }
 
   /**
@@ -390,9 +428,7 @@ struct OrderedBinaryTree {
         [this](NodePtr n) {
           destroy_node(n);
         });
-    root = nullptr;
-    first = nullptr;
-    last = nullptr;
+    reset();
   }
 
   /**
@@ -415,10 +451,14 @@ struct OrderedBinaryTree {
    *
    *  This function does not check if `pos.node` is actually reachable from
    *    `root`.
+   *
+   *  If `n` is null, this function does nothing.
    */
   template<bool update_sizes = true>
   constexpr void link(InsertPosition const& pos, NodePtr n) {
-    ASSERT(n);
+    if (!n) {
+      return;
+    }
     if (root) {
       ASSERT(pos.node);
       ASSERT(pos.node->is_under(root));
@@ -438,25 +478,106 @@ struct OrderedBinaryTree {
 
   /**
    *  @brief
-   *  Calls `root->insert_at_index(index, n)` if `root` is not null, or sets
+   *  Calls `root->link_at_index(index, n)` if `root` is not null, or sets
    *    `root` to `n` if `root` is null.
+   * 
+   *  If `n` is null, this function does nothing.
    */
   template<bool update_sizes = true>
-  constexpr void insert_at_index(size_type index, NodePtr n) {
-    ASSERT(n);
+  constexpr void link_at_index(size_type index, NodePtr n) {
+    if (!n) {
+      return;
+    }
     if (root) {
       if (index == 0) {
         first = n->find_first_node();
       } else if (index == size()) {
         last = n->find_last_node();
       }
-      root->template insert_at_index<update_sizes>(index, n);
+      root->template link_at_index<update_sizes>(index, n);
     } else {
       ASSERT(index == 0);
       root = n;
       first = n->find_first_node();
       last = n->find_last_node();
     }
+  }
+
+  /**
+   *  @brief
+   *  Calls `link(pos, other.root)`.
+   *
+   *  This function does not take ownership from `other`.
+   *  To take ownership from `other`, use the overload that takes `This&&`.
+   */
+  template<bool update_sizes = true>
+  constexpr void link_subtree(InsertPosition const& pos, This const& other) {
+    if (other.empty()) {
+      return;
+    }
+    if (root) {
+      ASSERT(pos.node);
+      ASSERT(pos.node->is_under(root));
+      other.root->template link<update_sizes>(pos);
+      if (pos.left_child && pos.node == first) {
+        first = other.first;
+      } else if (!pos.left_child && pos.node == last) {
+        last = other.last;
+      }
+    } else {
+      ASSERT(!pos.node);
+      operator=(other);
+    }
+  }
+
+  /**
+   *  @brief
+   *  Calls the other overload of `link_subtree()`, then calls `other.reset()`.
+   *
+   *  In most situations, this overload should be preferred over the other one.
+   */
+  template<bool update_sizes = true>
+  constexpr void link_subtree(InsertPosition const& pos, This&& other) {
+    link_subtree(pos, const_cast<This const&>(other));
+    other.reset();
+  }
+
+  /**
+   *  @brief
+   *  Calls `link_at_index(index, other.root)`.
+   *
+   *  This function does not take ownership from `other`.
+   *  To take ownership from `other`, use the overload that takes `This&&`.
+   */
+  template<bool update_sizes = true>
+  constexpr void link_subtree_at_index(size_type index, This const& other) {
+    if (other.empty()) {
+      return;
+    }
+    if (root) {
+      if (index == 0) {
+        first = other.first;
+      } else if (index == size()) {
+        last = other.last;
+      }
+      root->template link_at_index<update_sizes>(index, other.root);
+    } else {
+      ASSERT(index == 0);
+      operator=(other);
+    }
+  }
+
+  /**
+   *  @brief
+   *  Calls the other overload of `link_subtree_at_index()`, then calls
+   *    `other.reset()`.
+   *
+   *  In most situations, this overload should be preferred over the other one.
+   */
+  template<bool update_sizes = true>
+  constexpr void link_subtree_at_index(size_type index, This&& other) {
+    link_subtree_at_index(index, const_cast<This const&>(other));
+    other.reset();
   }
 
   /**
@@ -473,7 +594,7 @@ struct OrderedBinaryTree {
   template<bool update_sizes = true, class... Args>
   constexpr NodePtr emplace_at_index(size_type index, Args&&... args) {
     NodePtr n{create_node(std::forward<Args>(args)...)};
-    insert_at_index<update_sizes>(index, n);
+    link_at_index<update_sizes>(index, n);
     return n;
   }
 
@@ -493,7 +614,7 @@ struct OrderedBinaryTree {
       last = n->parent;
     }
     if (root == n) {
-      root = nullptr;
+      reset();
     }
     return n->template unlink<update_sizes>();
   }
@@ -520,18 +641,19 @@ struct OrderedBinaryTree {
    *    original tree.
    */
   template<bool update_sizes = true>
-  constexpr std::pair<This, InsertPosition> splice(NodePtr n) {
+  constexpr std::pair<This, InsertPosition> unlink_subtree(NodePtr n) {
     InsertPosition pos{unlink<update_sizes>(n)};
     return {This{n}, pos};
   }
 
   /**
    *  @brief
-   *  Calls `splice(find_node_at_index(index))`.
+   *  Calls `unlink_subtree(find_node_at_index(index))`.
    */
   template<bool update_sizes = true>
-  constexpr std::pair<This, InsertPosition> splice_at_index(size_type index) {
-    return splice(find_node_at_index(index));
+  constexpr std::pair<This, InsertPosition> unlink_subtree_at_index(
+      size_type index) {
+    return unlink_subtree(find_node_at_index(index));
   }
 
   /**

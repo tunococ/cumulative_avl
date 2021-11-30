@@ -27,10 +27,18 @@ struct OrderedBinaryTreeNode {
   /// `SizeT`.
   using size_type = SizeT;
   
+  template<class T>
+  using AddPointer = typename AddPointerT<T>::type;
+
   using ThisPtr = typename AddPointerT<This>::type;
   using ConstThisPtr = typename AddPointerT<This const>::type;
   template<bool constant>
   using CondThisPtr = std::conditional_t<constant, ConstThisPtr, ThisPtr>;
+
+  using DataPtr = typename AddPointerT<Data>::type;
+  using ConstDataPtr = typename AddPointerT<Data const>::type;
+  template<bool constant>
+  using CondDataPtr = std::conditional_t<constant, ConstDataPtr, DataPtr>;
 
   /// Left child. May be null.
   ThisPtr left_child{nullptr};
@@ -495,6 +503,9 @@ struct OrderedBinaryTreeNode {
   static constexpr CondThisPtr<constant> find_next_node(
       CondThisPtr<constant> n,
       size_type steps) {
+    if (steps < 0) {
+      return find_prev_node<constant>(n, -steps);
+    }
     ASSERT(n);
     while (true) {
       if (steps == 0) {
@@ -631,6 +642,9 @@ struct OrderedBinaryTreeNode {
   static constexpr CondThisPtr<constant> find_prev_node(
       CondThisPtr<constant> n,
       size_type steps) {
+    if (steps < 0) {
+      return find_next_node<constant>(n, -steps);
+    }
     ASSERT(n);
     while (true) {
       if (steps == 0) {
@@ -688,6 +702,44 @@ struct OrderedBinaryTreeNode {
    */
   constexpr ConstThisPtr find_prev_node(size_type steps) const {
     return find_prev_node<true>(this, steps);
+  }
+
+  /**
+   *  @brief
+   *  Unifies `find_next_node()` and `find_prev_node()` by allowing `steps` to
+   *    be an arbitrary, possibly signed, integer type.
+   */
+  template<bool constant, class Integer>
+  static constexpr CondThisPtr<constant> find_node_displaced_by(
+      CondThisPtr<constant> n,
+      Integer steps) {
+    if (steps > 0) {
+      return n->template find_next_node<constant>(
+          static_cast<size_type>(steps));
+    }
+    if (steps < 0) {
+      return n->template find_prev_node<constant>(
+          static_cast<size_type>(-steps));
+    }
+    return n;
+  }
+
+  /**
+   *  @brief
+   *  Calls `find_node_displaced_by(this, steps)`.
+   */
+  template<class Integer>
+  constexpr ThisPtr find_node_displaced_by(Integer steps) {
+    return find_node_displaced_by<false>(this, steps);
+  }
+
+  /**
+   *  @brief
+   *  Calls `find_node_displaced_by(this, steps)`.
+   */
+  template<class Integer>
+  constexpr ConstThisPtr find_node_displaced_by(Integer steps) const {
+    return find_node_displaced_by<true>(this, steps);
   }
 
   /**
@@ -774,7 +826,7 @@ struct OrderedBinaryTreeNode {
    *  This function assumes that `n` has the correct size.
    */
   template<bool update_sizes = true>
-  constexpr void insert_at_index(size_type index, ThisPtr n) {
+  constexpr void link_at_index(size_type index, ThisPtr n) {
     ASSERT(n);
     n->template link<update_sizes>(find_insert_position_for_index(index));
   }
@@ -787,7 +839,7 @@ struct OrderedBinaryTreeNode {
   template<bool update_sizes = true, class... Args>
   constexpr ThisPtr emplace_at_index(size_type index, Args&&... args) {
     ThisPtr n{new This(nullptr, std::forward<Args>(args)...)};
-    insert_at_index<update_sizes>(index, n);
+    link_at_index<update_sizes>(index, n);
     return n;
   }
 
