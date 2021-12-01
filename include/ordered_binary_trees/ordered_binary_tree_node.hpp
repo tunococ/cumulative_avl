@@ -13,6 +13,27 @@ namespace ordered_binary_trees {
 
 /**
  *  @brief
+ *  Struct that presents `AddPointer` for any given `Allocator` type.
+ * 
+ *  For generality, `OrderedBinaryTreeNode` takes a functor of sort `* -> *`
+ *    (similar to `std::add_pointer`) instead of taking an allocator type.
+ *  The struct `AddPointerFromAllocator<Allocator>` provides a convenient way
+ *    to construct the `AddPointer` functor for any valid `Allocator` type.
+ *  (See `std::allocator` and `std::allocator_traits` for more details.)
+ */
+template<class AllocatorT>
+struct AddPointerFromAllocator {
+  using Allocator = AllocatorT;
+
+  template<class T>
+  struct AddPointer {
+    using type = typename std::allocator_traits<Allocator>::
+        template rebind_alloc<T>::pointer;
+  };
+};
+
+/**
+ *  @brief
  *  Basic type of nodes in an ordered binary tree.
  */
 template<
@@ -88,6 +109,7 @@ struct OrderedBinaryTreeNode {
      */
     constexpr InsertPosition()
       : node{nullptr} {}
+
     /**
      *  @brief
      *  Creates a position for a child of `node`.
@@ -101,6 +123,22 @@ struct OrderedBinaryTreeNode {
      */
     constexpr InsertPosition(ThisPtr node, bool left_child)
       : node{node}, left_child{left_child} {
+    }
+
+    /**
+     *  @brief
+     *  Returns `true` iff this `InsertPosition` is equal to `other`.
+     */
+    constexpr bool operator==(InsertPosition const& other) const {
+      return (node == other.node) && (left_child == other.left_child);
+    }
+
+    /**
+     *  @brief
+     *  Returns `false` iff this `InsertPosition` is equal to `other`.
+     */
+    constexpr bool operator!=(InsertPosition const& other) const {
+      return !operator==(other);
     }
   };
 
@@ -750,7 +788,7 @@ struct OrderedBinaryTreeNode {
    *
    *  This function simply calls the constructor of `InsertPosition`.
    */
-  constexpr InsertPosition get_insert_position(bool left) {
+  constexpr InsertPosition make_insert_position(bool left) {
     return InsertPosition{this, left};
   }
 
@@ -764,7 +802,7 @@ struct OrderedBinaryTreeNode {
    *  After inserting a node at the returned `InsertPosition`, `index` will
    *    be the index of that node.
    */
-  constexpr InsertPosition find_insert_position_for_index(size_type index) {
+  constexpr InsertPosition get_insert_position_for_index(size_type index) {
     ThisPtr n{this};
     while (true) {
       ThisPtr l{n->left_child};
@@ -786,6 +824,30 @@ struct OrderedBinaryTreeNode {
         return {n, false};
       }
     }
+  }
+
+  /**
+   *  @brief
+   *  Finds `InsertPosition` for a node that would be a new immediate
+   *    predecessor of this node after insertion.
+   */
+  constexpr InsertPosition get_prev_insert_position() {
+    if (!left_child) {
+      return {this, true};
+    }
+    return {find_prev_node(), false};
+  }
+
+  /**
+   *  @brief
+   *  Finds `InsertPosition` for a node that would be a new immediate successor
+   *    of this node after insertion.
+   */
+  constexpr InsertPosition get_next_insert_position() {
+    if (!right_child) {
+      return {this, false};
+    }
+    return {find_next_node(), true};
   }
 
   /**
@@ -828,7 +890,7 @@ struct OrderedBinaryTreeNode {
   template<bool update_sizes = true>
   constexpr void link_at_index(size_type index, ThisPtr n) {
     ASSERT(n);
-    n->template link<update_sizes>(find_insert_position_for_index(index));
+    n->template link<update_sizes>(get_insert_position_for_index(index));
   }
 
   /**
@@ -1002,8 +1064,8 @@ struct OrderedBinaryTreeNode {
    *  The return value is `{parent->parent, parent}` prior to the call.
    *  These are nodes whose data might need to be updated before updating
    *    `this`.
-   *  This that the former `parent->parent` may become a child of the former
-   *    `parent`, but the converse is not possible, so it is safer to always
+   *  The former `parent->parent` may become a child of the former `parent`
+   *    but the converse is not possible, so it is safer to always
    *    update the `first` component of the return value before `second`.
    */
   constexpr std::pair<ThisPtr, ThisPtr> splay_2() {
@@ -1093,17 +1155,20 @@ struct OrderedBinaryTreeNode {
 
   /**
    *  @brief
-   *  Splays a node up to be the new root.
-   * 
+   *  Splays a node upwards, stopping before touching `top`.
+   *  If `top` is null, `this` will become a new root.
+   *  Otherwise, `this` will become an immediate child of `top`.
+   *
    *  The function `f` for *updating* node data along the way can be
    *    customized.
    *  `f` should take one argument of type `ThisPtr`.
    *  The return value of `f` is not used.
    */
   template<class FunctionType>
-  constexpr void splay(FunctionType f) {
-    while (parent) {
-      if (parent->parent) {
+  constexpr void splay(FunctionType f, ThisPtr top = nullptr) {
+    ASSERT(!top || is_under(top));
+    while (parent != top) {
+      if (parent->parent != top) {
         std::pair<ThisPtr, ThisPtr> pp_p{splay_2()};
         f(pp_p.first);
         f(pp_p.second);
@@ -1122,11 +1187,11 @@ struct OrderedBinaryTreeNode {
    *    parameter `update_sizes`.
    */
   template<bool update_sizes = true>
-  constexpr void splay() {
+  constexpr void splay(ThisPtr top = nullptr) {
     if constexpr (update_sizes) {
-      splay(This::update_node_size);
+      splay(This::update_node_size, top);
     } else {
-      splay([](ThisPtr) {});
+      splay([](ThisPtr) {}, top);
     }
   }
 

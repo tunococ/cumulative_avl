@@ -25,7 +25,8 @@ struct OrderedBinaryTree {
   using Node = NodeT;
 
   /// `AllocatorT`.
-  using Allocator = AllocatorT;
+  using Allocator = typename std::allocator_traits<AllocatorT>::
+      template rebind_alloc<Node>;
 
   /// `Node::Data`.
   using Data = typename Node::Data;
@@ -126,7 +127,7 @@ struct OrderedBinaryTree {
       first{other.first},
       last{other.last},
       allocator{std::move(other.allocator)} {
-    other.reset();
+    other.clear();
   }
 
   /**
@@ -151,7 +152,7 @@ struct OrderedBinaryTree {
     root = other.root;
     first = other.first;
     last = other.last;
-    other.reset();
+    other.clear();
     return *this;
   }
 
@@ -175,7 +176,7 @@ struct OrderedBinaryTree {
    *  @brief
    *  Empties the tree.
    */
-  constexpr void reset() {
+  constexpr void clear() {
     root = nullptr;
     first = nullptr;
     last = nullptr;
@@ -187,7 +188,7 @@ struct OrderedBinaryTree {
    */
   constexpr NodePtr release() {
     NodePtr r{root};
-    reset();
+    clear();
     return r;
   }
 
@@ -428,17 +429,17 @@ struct OrderedBinaryTree {
         [this](NodePtr n) {
           destroy_node(n);
         });
-    reset();
+    clear();
   }
 
   /**
    *  @brief
-   *  Calls `root->find_insert_position_for_index(index)` if `root` is not
+   *  Calls `root->get_insert_position_for_index(index)` if `root` is not
    *    null, or returns an empty `InsertPosition` otherwise.
    */
-  constexpr InsertPosition find_insert_position_for_index(size_type index) {
+  constexpr InsertPosition get_insert_position_for_index(size_type index) {
     if (root) {
-      return root->find_insert_position_for_index(index);
+      return root->get_insert_position_for_index(index);
     } else {
       return {};
     }
@@ -532,14 +533,14 @@ struct OrderedBinaryTree {
 
   /**
    *  @brief
-   *  Calls the other overload of `link_subtree()`, then calls `other.reset()`.
+   *  Calls the other overload of `link_subtree()`, then calls `other.clear()`.
    *
    *  In most situations, this overload should be preferred over the other one.
    */
   template<bool update_sizes = true>
   constexpr void link_subtree(InsertPosition const& pos, This&& other) {
     link_subtree(pos, const_cast<This const&>(other));
-    other.reset();
+    other.clear();
   }
 
   /**
@@ -570,14 +571,14 @@ struct OrderedBinaryTree {
   /**
    *  @brief
    *  Calls the other overload of `link_subtree_at_index()`, then calls
-   *    `other.reset()`.
+   *    `other.clear()`.
    *
    *  In most situations, this overload should be preferred over the other one.
    */
   template<bool update_sizes = true>
   constexpr void link_subtree_at_index(size_type index, This&& other) {
     link_subtree_at_index(index, const_cast<This const&>(other));
-    other.reset();
+    other.clear();
   }
 
   /**
@@ -614,7 +615,7 @@ struct OrderedBinaryTree {
       last = n->parent;
     }
     if (root == n) {
-      reset();
+      clear();
     }
     return n->template unlink<update_sizes>();
   }
@@ -686,18 +687,23 @@ struct OrderedBinaryTree {
 
   /**
    *  @brief
-   *  Splays a node to the root and calls `f(n)` for each node `n` that is
-   *    affected by splaying.
+   *  Splays a node `n` to be an immediate child of `top` or to be the root if
+   *    `top` is null.
+   *  `f()` is called for all nodes affected by splaying.
    *
    *  @note
-   *  This usually changes `root`.
+   *  If `top` is null and `n` is not `root`, `root` will change.
    */
   template<class FunctionType>
-  constexpr void splay(NodePtr n, FunctionType f) {
+  constexpr void splay(NodePtr n, FunctionType f, NodePtr top = nullptr) {
     ASSERT(root);
     ASSERT(n);
-    n->splay(f);
-    root = n;
+    ASSERT(n->is_under(root));
+    ASSERT(!top || top->is_under(root));
+    n->splay(f, top);
+    if (!top) {
+      root = n;
+    }
   }
 
   /**
@@ -705,8 +711,13 @@ struct OrderedBinaryTree {
    *  Overload of `splay()` that supplies `update_node_size` as the *update*
    *    function.
    */
-  constexpr void splay(NodePtr n) {
-    splay(n, Node::update_node_size);
+  template<bool update_sizes = true>
+  constexpr void splay(NodePtr n, NodePtr top = nullptr) {
+    if constexpr (update_sizes) {
+      splay(n, Node::update_node_size, top);
+    } else {
+      splay(n, [](NodePtr) {}, top);
+    }
   }
 
   /**

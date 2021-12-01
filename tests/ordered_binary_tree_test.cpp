@@ -389,6 +389,31 @@ TEST_CASE("OrderedBinaryTree -- clone") {
   tree.destroy_all_nodes();
 }
 
+TEST_CASE("OrderedBinaryTree -- insert positions") {
+  using Node = obt::OrderedBinaryTreeNode<string>;
+  using Tree = obt::OrderedBinaryTree<Node>;
+  using InsertPosition = Node::InsertPosition;
+
+  Tree tree;
+  vector<string> list;
+  insert_to_tree(tree, test_insertions_1);
+  insert_to_list(list, test_insertions_1);
+
+  for (size_t i{0}; i < tree.size(); ++i) {
+    Node* n{tree.find_node_at_index(i)};
+
+    InsertPosition pos_1{tree.get_insert_position_for_index(i)};
+    InsertPosition pos_2{n->get_prev_insert_position()};
+    CHECK(pos_1 == pos_2);
+
+    InsertPosition pos_3{tree.get_insert_position_for_index(i + 1)};
+    InsertPosition pos_4{n->get_next_insert_position()};
+    CHECK(pos_3 == pos_4);
+  }
+
+  tree.destroy_all_nodes();
+}
+
 TEST_CASE("OrderedBinaryTree -- insert and remove subtrees") {
   using Node = obt::OrderedBinaryTreeNode<string>;
   using Tree = obt::OrderedBinaryTree<Node>;
@@ -505,6 +530,7 @@ TEST_CASE("OrderedBinaryTree -- rotate") {
       CHECK(tree_equals_list(tree, list));
     }
   }
+
   SECTION("rotate_right") {
     for (size_t i{0}; i < tree.size(); ++i) {
       Node* n{tree.find_node_at_index(i)};
@@ -533,19 +559,42 @@ TEST_CASE("OrderedBinaryTree -- splay") {
   insert_to_tree(tree, test_insertions_1);
   insert_to_list(list, test_insertions_1);
 
-  cout << "Starting tree:\n";
-  dump_tree(cout, tree);
-
-  for (size_t i{0}; i < tree.size(); ++i) {
-    Node* n{tree.find_node_at_index(i)};
-    if (n->is_root()) {
-      continue;
-    }
-    tree.splay(n);
-    cout << "After splaying at index " << i
-        << " (value: " << n->data << "):\n";
+  SECTION("splay to root") {
+    cout << "Starting tree:\n";
     dump_tree(cout, tree);
-    CHECK(tree_equals_list(tree, list));
+
+    for (size_t i{0}; i < tree.size(); ++i) {
+      Node* n{tree.find_node_at_index(i)};
+      if (n->is_root()) {
+        continue;
+      }
+      tree.splay(n);
+      cout << "After splaying at index " << i
+          << " (value: " << n->data << ") to root:\n";
+      dump_tree(cout, tree);
+      CHECK(tree_equals_list(tree, list));
+      CHECK(n == tree.root);
+      CHECK(n->is_root());
+    }
+  }
+
+  SECTION("splay under root") {
+    cout << "Starting tree:\n";
+    dump_tree(cout, tree);
+
+    for (size_t i{0}; i < tree.size(); ++i) {
+      Node* n{tree.find_node_at_index(i)};
+      Node* root{tree.root};
+      if (n == root) {
+        continue;
+      }
+      tree.splay(n, root);
+      cout << "After splaying at index " << i
+          << " (value: " << n->data << ") under root:\n";
+      dump_tree(cout, tree);
+      CHECK(tree_equals_list(tree, list));
+      CHECK(n->parent == root);
+    }
   }
 }
 
@@ -616,8 +665,11 @@ TEST_CASE("OrderedBinaryTree -- erase") {
 TEST_CASE("OrderedBinaryTreeIterator") {
   using Node = obt::OrderedBinaryTreeNode<string>;
   using Tree = obt::OrderedBinaryTree<Node>;
-  using Iterator = obt::OrderedBinaryTreeIterator<Tree, false>;
-  using ConstIterator = obt::OrderedBinaryTreeIterator<Tree, true>;
+  using Iterator = obt::OrderedBinaryTreeIterator<Tree, false, false>;
+  using ConstIterator = obt::OrderedBinaryTreeIterator<Tree, true, false>;
+  using ReverseIterator = obt::OrderedBinaryTreeIterator<Tree, false, true>;
+  using ConstReverseIterator =
+      obt::OrderedBinaryTreeIterator<Tree, true, true>;
 
   Tree tree;
   vector<string> list;
@@ -629,37 +681,46 @@ TEST_CASE("OrderedBinaryTreeIterator") {
   Iterator end{&tree, nullptr};
   ConstIterator cbegin{&tree, tree.first};
   ConstIterator cend{&tree, nullptr};
+  ReverseIterator rbegin{&tree, tree.last};
+  ReverseIterator rend{&tree, nullptr};
+  ConstReverseIterator crbegin{&tree, tree.last};
+  ConstReverseIterator crend{&tree, nullptr};
 
-  SECTION("operator++") {
-    cout << "Tree:\n";
-    dump_tree(cout, tree);
+  cout << "Tree:\n";
+  dump_tree(cout, tree);
 
+  SECTION("one step forward") {
     cout << "Testing operator++ -- iterating forward:\n ";
-    for (auto i{cbegin}; i != cend; ++i) {
+    auto i{begin};
+    auto ci{cbegin};
+    for (; i != end && ci != cend; ++i, ci++) {
       cout << " " << *i;
+      CHECK(*i == *ci);
     }
     cout << "\n";
+    CHECK(i == end);
+    CHECK(ci == cend);
+
     CHECK(std::equal(list.begin(), list.end(), begin, end));
     CHECK(std::equal(list.cbegin(), list.cend(), cbegin, cend));
   }
 
-  SECTION("operator--") {
+  SECTION("one step backward") {
     cout << "Testing operator-- -- iterating backward:\n ";
-    for (auto i{cend}; i != cbegin;) {
-      --i;
+    auto i{begin};
+    auto ci{cbegin};
+    while (i != begin && ci != cbegin) {
+      i--;
+      --ci;
       cout << " " << *i;
+      CHECK(*i == *ci);
     }
     cout << "\n";
-
-    auto rbegin{std::make_reverse_iterator(end)};
-    auto rend{std::make_reverse_iterator(begin)};
-    auto crbegin{std::make_reverse_iterator(cend)};
-    auto crend{std::make_reverse_iterator(cbegin)};
-    CHECK(std::equal(list.rbegin(), list.rend(), rbegin, rend));
-    CHECK(std::equal(list.crbegin(), list.crend(), crbegin, crend));
+    CHECK(i == begin);
+    CHECK(ci == cbegin);
   }
 
-  SECTION("operator+ and operator-") {
+  SECTION("multiple steps") {
     for (size_t i{0}; i <= tree.size(); ++i) {
       auto it_i{begin + i};
       CHECK(it_i == i + begin);
@@ -667,10 +728,18 @@ TEST_CASE("OrderedBinaryTreeIterator") {
         auto it_j{begin + j};
         ssize_t dist{static_cast<ssize_t>(j) - static_cast<ssize_t>(i)};
 
+        // iterator + distance
         CHECK(it_i + dist == it_j);
+        // distance + iterator
         CHECK(dist + it_i == it_j);
+        // iterator - distance
         CHECK(it_i == it_j - dist);
+        // -distance + iterator
         CHECK(it_i == -dist + it_j);
+        // iterator - iterator
+        CHECK(it_j - it_i == dist);
+
+        // operator[]
         if (i < tree.size()) {
           CHECK(it_i[0] == list[i]);
           CHECK(it_j[-dist] == *it_i);
@@ -680,13 +749,77 @@ TEST_CASE("OrderedBinaryTreeIterator") {
           CHECK(it_i[dist] == *it_j);
         }
 
+        // get_index
+        CHECK(it_i.get_index() == i);
+        CHECK(it_j.get_index() == j);
+
+        // Comparison operators
         CHECK((i == j ? (it_i == it_j) : true));
         CHECK((i != j ? (it_i != it_j) : true));
         CHECK((i > j ? (it_i > it_j) : true));
         CHECK((i >= j ? (it_i >= it_j) : true));
         CHECK((i < j ? (it_i < it_j) : true));
         CHECK((i <= j ? (it_i <= it_j) : true));
+
+        // Assignment
+        it_j = it_i;
+        CHECK(it_j == it_i);
       }
+    }
+  }
+
+  SECTION("conversion to const") {
+    auto i{begin};
+    auto ci{cbegin};
+    while (true) {
+      // Constructor
+      ConstIterator const_i_1{i};
+      CHECK(const_i_1 == ci);
+
+      // Assignment
+      ConstIterator const_i_2;
+      const_i_2 = i;
+      CHECK(const_i_2 == ci);
+      const_i_2 = ci;
+      CHECK(const_i_2 == ci);
+      ConstIterator const_i_3{ci};
+      CHECK(const_i_2 == const_i_3);
+
+      if (i == end || ci == cend) {
+        break;
+      }
+      i++;
+      ++ci;
+    }
+  }
+
+  SECTION("reverse iterators") {
+    CHECK(std::equal(list.rbegin(), list.rend(), rbegin, rend));
+    CHECK(std::equal(list.crbegin(), list.crend(), crbegin, crend));
+
+    // get_index
+    auto ri{rbegin};
+    for (size_t i = 0; i < tree.size() && ri != rend; ++i, ++ri) {
+      CHECK(ri.get_index() == i);
+      CHECK(list[tree.size() - 1 - ri.get_index()] == *ri);
+    }
+    CHECK(ri == rend);
+    CHECK(ri.get_index() == tree.size());
+  }
+
+  SECTION("conversion to reverse") {
+    auto i{begin};
+    auto ri{rend};
+    while (true) {
+      CHECK(i.make_reverse_iterator() == ri);
+      CHECK(ri.make_reverse_iterator() == i);
+      if (ri == rbegin) {
+        CHECK(i == end);
+        break;
+      }
+      ri--;
+      CHECK(*i == *ri);
+      ++i;
     }
   }
 
