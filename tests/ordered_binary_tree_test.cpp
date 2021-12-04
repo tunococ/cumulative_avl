@@ -399,16 +399,40 @@ TEST_CASE("OrderedBinaryTree -- insert positions") {
   insert_to_tree(tree, test_insertions_1);
   insert_to_list(list, test_insertions_1);
 
-  for (size_t i{0}; i < tree.size(); ++i) {
-    Node* n{tree.find_node_at_index(i)};
+  SECTION("by index") {
+    for (size_t i{0}; i < tree.size(); ++i) {
+      Tree tree_a{tree.clone()};
 
-    InsertPosition pos_1{tree.get_insert_position_for_index(i)};
-    InsertPosition pos_2{n->get_prev_insert_position()};
-    CHECK(pos_1 == pos_2);
+      Node* n{tree_a.find_node_at_index(i)};
 
-    InsertPosition pos_3{tree.get_insert_position_for_index(i + 1)};
-    InsertPosition pos_4{n->get_next_insert_position()};
-    CHECK(pos_3 == pos_4);
+      InsertPosition pos_1{tree_a.get_insert_position_for_index(i)};
+      InsertPosition pos_2{n->get_prev_insert_position()};
+      CHECK(pos_1 == pos_2);
+
+      InsertPosition pos_3{tree_a.get_insert_position_for_index(i + 1)};
+      InsertPosition pos_4{n->get_next_insert_position()};
+      CHECK(pos_3 == pos_4);
+
+      string new_data_1{"new_data_1"};
+      tree_a.emplace(pos_1, new_data_1);
+      CHECK(n->find_prev_node()->data == new_data_1);
+
+      string new_data_2{"new_data_2"};
+      tree_a.emplace(pos_3, new_data_2);
+      CHECK(n->find_next_node()->data == new_data_2);
+
+      tree_a.destroy_all_nodes();
+    }
+  }
+
+  SECTION("first and last") {
+    string new_data_1{"new_data_1"};
+    tree.emplace(tree.get_first_insert_position(), new_data_1);
+    CHECK(tree.first->data == new_data_1);
+
+    string new_data_2{"new_data_2"};
+    tree.emplace(tree.get_last_insert_position(), new_data_2);
+    CHECK(tree.last->data == new_data_2);
   }
 
   tree.destroy_all_nodes();

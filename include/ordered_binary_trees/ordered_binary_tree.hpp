@@ -1,13 +1,12 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <cstdint>
 #include <memory>
 #include <tuple>
 #include <type_traits>
 #include <utility>
-
-#include <ordered_binary_trees/assert.hpp>
 
 namespace ordered_binary_trees {
 
@@ -56,7 +55,13 @@ struct OrderedBinaryTree {
   static_assert(std::is_same_v<
       ConstNodePtr,
       typename std::allocator_traits<Allocator>::const_pointer>);
-  
+
+  /**
+   *  @brief
+   *  Allocator for nodes.
+   */
+  mutable Allocator allocator;
+
   /**
    *  @brief
    *  Root of the tree. This is null when the tree is empty.
@@ -74,31 +79,18 @@ struct OrderedBinaryTree {
    *  Rightmost node of the tree. This is null when the tree is empty.
    */
   NodePtr last{nullptr};
-
-  /**
-   *  @brief
-   *  Allocator for nodes.
-   */
-  mutable Allocator allocator;
-
-  /**
-   *  @brief
-   *  Creates a binary tree with a given root.
-   */
-  constexpr OrderedBinaryTree(
-      NodePtr root,
-      Allocator allocator = Allocator())
-    : root{root},
-      first{root ? root->find_first_node() : nullptr},
-      last{root ? root->find_last_node() : nullptr},
-      allocator{allocator} {}
   
   /**
    *  @brief
-   *  Creates an empty tree.
+   *  Creates a binary tree with a given allocator and a given root.
    */
-  constexpr OrderedBinaryTree(Allocator allocator = Allocator())
-    : allocator{allocator} {}
+  constexpr OrderedBinaryTree(
+      Allocator allocator = Allocator(),
+      NodePtr root = nullptr)
+    : allocator{allocator},
+      root{root},
+      first{root ? root->find_first_node() : nullptr},
+      last{root ? root->find_last_node() : nullptr} {}
 
   /**
    *  @brief
@@ -110,10 +102,10 @@ struct OrderedBinaryTree {
   template<class OtherNode, class OtherAllocator>
   constexpr OrderedBinaryTree(
       OrderedBinaryTree<OtherNode, OtherAllocator> const& other)
-    : root{other.root},
+    : allocator{other.allocator},
+      root{other.root},
       first{other.first},
-      last{other.last},
-      allocator{other.allocator} {
+      last{other.last} {
   }
 
   /**
@@ -123,10 +115,10 @@ struct OrderedBinaryTree {
   template<class OtherNode, class OtherAllocator>
   constexpr OrderedBinaryTree(
       OrderedBinaryTree<OtherNode, OtherAllocator>&& other)
-    : root{other.root},
+    : allocator{other.allocator},
+      root{other.root},
       first{other.first},
-      last{other.last},
-      allocator{std::move(other.allocator)} {
+      last{other.last} {
     other.clear();
   }
 
@@ -317,7 +309,7 @@ struct OrderedBinaryTree {
    *  Clones all nodes under the subtree rooted at `this` node.
    */
   constexpr NodePtr clone_nodes(ConstNodePtr n) const {
-    ASSERT(n);
+    assert(n);
     NodePtr cloned{create_node(n->data)};
     cloned->size = n->size;
     if (n->left_child) {
@@ -338,7 +330,7 @@ struct OrderedBinaryTree {
    *  Clones the tree.
    */
   constexpr This clone() const {
-    return This{root ? clone_nodes(root) : nullptr};
+    return This{allocator, root ? clone_nodes(root) : nullptr};
   }
 
   /**
@@ -414,7 +406,7 @@ struct OrderedBinaryTree {
    *  Destroys a node using the given allocator.
    */
   constexpr void destroy_node(NodePtr n) {
-    ASSERT(n);
+    assert(n);
     std::destroy_at(n);
     allocator.deallocate(n, 1);
   }
@@ -447,6 +439,30 @@ struct OrderedBinaryTree {
 
   /**
    *  @brief
+   *  Returns an `InsertPosition` for the prospective first node.
+   */
+  constexpr InsertPosition get_first_insert_position() {
+    if (first) {
+      return InsertPosition{first, true};
+    } else {
+      return {};
+    }
+  }
+
+  /**
+   *  @brief
+   *  Returns an `InsertPosition` for the prospective last node.
+   */
+  constexpr InsertPosition get_last_insert_position() {
+    if (last) {
+      return InsertPosition{last, false};
+    } else {
+      return {};
+    }
+  }
+
+  /**
+   *  @brief
    *  Links `n` as a child of `pos.node` if `root` is not null, or assigns `n`
    *    to `root` otherwise.
    *
@@ -461,8 +477,8 @@ struct OrderedBinaryTree {
       return;
     }
     if (root) {
-      ASSERT(pos.node);
-      ASSERT(pos.node->is_under(root));
+      assert(pos.node);
+      assert(pos.node->is_under(root));
       n->template link<update_sizes>(pos);
       if (pos.left_child && pos.node == first) {
         first = n->find_first_node();
@@ -470,7 +486,7 @@ struct OrderedBinaryTree {
         last = n->find_last_node();
       }
     } else {
-      ASSERT(!pos.node);
+      assert(!pos.node);
       root = n;
       first = n->find_first_node();
       last = n->find_last_node();
@@ -497,7 +513,7 @@ struct OrderedBinaryTree {
       }
       root->template link_at_index<update_sizes>(index, n);
     } else {
-      ASSERT(index == 0);
+      assert(index == 0);
       root = n;
       first = n->find_first_node();
       last = n->find_last_node();
@@ -517,8 +533,8 @@ struct OrderedBinaryTree {
       return;
     }
     if (root) {
-      ASSERT(pos.node);
-      ASSERT(pos.node->is_under(root));
+      assert(pos.node);
+      assert(pos.node->is_under(root));
       other.root->template link<update_sizes>(pos);
       if (pos.left_child && pos.node == first) {
         first = other.first;
@@ -526,7 +542,7 @@ struct OrderedBinaryTree {
         last = other.last;
       }
     } else {
-      ASSERT(!pos.node);
+      assert(!pos.node);
       operator=(other);
     }
   }
@@ -563,7 +579,7 @@ struct OrderedBinaryTree {
       }
       root->template link_at_index<update_sizes>(index, other.root);
     } else {
-      ASSERT(index == 0);
+      assert(index == 0);
       operator=(other);
     }
   }
@@ -583,14 +599,30 @@ struct OrderedBinaryTree {
 
   /**
    *  @brief
-   *  Calls `root->emplace_at_index(index, args...)` if `root` is not null, or
-   *    sets `root` to a new node constructed with the given `args`, then
-   *    returns the constructed node.
+   *  Allocates a new node and adds it to the tree at the given
+   *    `InsertPosition`, then returns the new node.
    *
-   *  Note that the returned node will not be automatically deallocated by
-   *    `OrderedBinaryTree`'s destructor.
-   *  `OrderedBinaryTree::destroy_all_nodes()` can be called to clean up all
-   *    nodes reachable from `root`.
+   *  Note that the new node will not be automatically deallocated when
+   *    `OrderedBinaryTree` is destroyed.
+   * 
+   *  @sa destroy_all_nodes, emplace
+   */
+  template<bool update_sizes = true, class... Args>
+  constexpr NodePtr emplace(InsertPosition const& pos, Args&&... args) {
+    NodePtr n{create_node(std::forward<Args>(args)...)};
+    link<update_sizes>(pos, n);
+    return n;
+  }
+
+  /**
+   *  @brief
+   *  Allocates a new node and adds it to the tree at the given `index`, then
+   *    returns the new node.
+   *
+   *  Note that the new node will not be automatically deallocated when
+   *    `OrderedBinaryTree` is destroyed.
+   * 
+   *  @sa destroy_all_nodes, emplace_at_index
    */
   template<bool update_sizes = true, class... Args>
   constexpr NodePtr emplace_at_index(size_type index, Args&&... args) {
@@ -606,8 +638,8 @@ struct OrderedBinaryTree {
    */
   template<bool update_sizes = true>
   constexpr InsertPosition unlink(NodePtr n) {
-    ASSERT(root);
-    ASSERT(n->is_under(root));
+    assert(root);
+    assert(n->is_under(root));
     if (first->is_under(n)) {
       first = n->parent;
     }
@@ -630,7 +662,7 @@ struct OrderedBinaryTree {
   constexpr std::pair<NodePtr, InsertPosition> unlink_at_index(
       size_type index) {
     NodePtr n{find_node_at_index(index)};
-    ASSERT(n);
+    assert(n);
     InsertPosition pos{unlink<update_sizes>(n)};
     return {n, pos};
   }
@@ -644,7 +676,7 @@ struct OrderedBinaryTree {
   template<bool update_sizes = true>
   constexpr std::pair<This, InsertPosition> unlink_subtree(NodePtr n) {
     InsertPosition pos{unlink<update_sizes>(n)};
-    return {This{n}, pos};
+    return {This{allocator, n}, pos};
   }
 
   /**
@@ -696,10 +728,10 @@ struct OrderedBinaryTree {
    */
   template<class FunctionType>
   constexpr void splay(NodePtr n, FunctionType f, NodePtr top = nullptr) {
-    ASSERT(root);
-    ASSERT(n);
-    ASSERT(n->is_under(root));
-    ASSERT(!top || top->is_under(root));
+    assert(root);
+    assert(n);
+    assert(n->is_under(root));
+    assert(!top || top->is_under(root));
     n->splay(f, top);
     if (!top) {
       root = n;
@@ -756,10 +788,10 @@ struct OrderedBinaryTree {
    *  If the template parameter `delete_node` is set to `true`, the node being
    *    erased will also be deleted.
    */
-  template<bool update_sizes = true, bool delete_node = false>
+  template<bool update_sizes = true, bool delete_node = true>
   constexpr std::pair<NodePtr, NodePtr> erase(NodePtr n) {
-    ASSERT(root);
-    ASSERT(n->is_under(root));
+    assert(root);
+    assert(n->is_under(root));
     if (first == n) {
       first = first->find_next_node();
     }
@@ -789,7 +821,7 @@ struct OrderedBinaryTree {
    */
   template<bool update_sizes = true>
   constexpr std::tuple<NodePtr, NodePtr, NodePtr> erase_at_index(size_type index) {
-    ASSERT(root);
+    assert(root);
     NodePtr n{find_node_at_index(index)};
     std::pair<NodePtr, NodePtr> erase_result{erase<update_sizes, false>(n)};
     return {erase_result.first, erase_result.second, n};
@@ -804,7 +836,7 @@ struct OrderedBinaryTree {
    */
   template<bool update_sizes = true>
   constexpr std::pair<NodePtr, NodePtr> delete_at_index(size_type index) {
-    ASSERT(root);
+    assert(root);
     NodePtr n{find_node_at_index(index)};
     std::pair<NodePtr, NodePtr> erase_result{erase<update_sizes, true>(n)};
     return erase_result;

@@ -1,8 +1,7 @@
 #pragma once
 
+#include <cassert>
 #include <type_traits>
-
-#include <ordered_binary_trees/assert.hpp>
 
 namespace ordered_binary_trees {
 
@@ -81,7 +80,7 @@ class OrderedBinaryTreeIterator {
   friend class ManagedTree;
   
   constexpr Node* begin_node() const {
-    ASSERT(tree_);
+    assert(tree_);
     if constexpr (reverse) {
       return tree_->last;
     } else {
@@ -90,7 +89,7 @@ class OrderedBinaryTreeIterator {
   }
 
   constexpr Node* before_end_node() const {
-    ASSERT(tree_);
+    assert(tree_);
     if constexpr (reverse) {
       return tree_->first;
     } else {
@@ -150,7 +149,7 @@ class OrderedBinaryTreeIterator {
   }
 
   constexpr size_type get_index() const {
-    ASSERT(tree_);
+    assert(tree_);
     if constexpr (reverse) {
       return node_ ? (tree_->size() - node_->get_index() - 1) : tree_->size();
     } else {
@@ -180,29 +179,29 @@ class OrderedBinaryTreeIterator {
   }
 
   constexpr bool operator==(This const& other) const {
-    ASSERT(tree_ == other.tree_);
+    assert(tree_ == other.tree_);
     return node_ == other.node_;
   }
 
   constexpr bool operator!=(This const& other) const {
-    ASSERT(tree_ == other.tree_);
+    assert(tree_ == other.tree_);
     return node_ != other.node_;
   }
 
   constexpr std::conditional_t<constant, Data const&, Data&> operator*()
       const {
-    ASSERT(node_);
+    assert(node_);
     return ExtractValue::value_in_data(node_->data);
   }
 
   constexpr std::conditional_t<constant, Data const*, Data*> operator->()
       const {
-    ASSERT(node_);
+    assert(node_);
     return &(operator*());
   }
 
   constexpr This& operator++() {
-    ASSERT(node_);
+    assert(node_);
     node_ = next_node(node_);
     return *this;
   }
@@ -216,9 +215,9 @@ class OrderedBinaryTreeIterator {
   template<class Integer,
       std::enable_if_t<std::is_integral_v<Integer>, int> = 0>
   constexpr This& operator+=(Integer steps) {
-    ASSERT(tree_);
+    assert(tree_);
     if (steps > 0) {
-      ASSERT(node_);
+      assert(node_);
       node_ = next_node(node_, static_cast<size_type>(steps));
     } else if (steps < 0) {
       if (!node_) {
@@ -226,7 +225,7 @@ class OrderedBinaryTreeIterator {
       } else {
         node_ = prev_node(node_, static_cast<size_type>(-steps));
       }
-      ASSERT(node_);
+      assert(node_);
     }
     return *this;
   }
@@ -243,10 +242,10 @@ class OrderedBinaryTreeIterator {
     if (node_) {
       node_ = prev_node(node_);
     } else {
-      ASSERT(tree_);
+      assert(tree_);
       node_ = before_end_node();
     }
-    ASSERT(node_);
+    assert(node_);
     return *this;
   }
 
@@ -261,14 +260,14 @@ class OrderedBinaryTreeIterator {
   constexpr This& operator-=(Integer steps) {
     if (steps > 0) {
       if (!node_) {
-        ASSERT(tree_);
+        assert(tree_);
         node_ = prev_node(before_end_node(), static_cast<size_type>(steps - 1));
       } else {
         node_ = prev_node(node_, static_cast<size_type>(steps));
       }
-      ASSERT(node_);
+      assert(node_);
     } else if (steps < 0) {
-      ASSERT(node_);
+      assert(node_);
       node_ = next_node(node_, static_cast<size_type>(-steps));
     }
     return *this;
@@ -290,28 +289,28 @@ class OrderedBinaryTreeIterator {
   }
 
   constexpr difference_type operator-(This const& other) const {
-    ASSERT(tree_ == other.tree_);
+    assert(tree_ == other.tree_);
     return static_cast<difference_type>(get_index()) -
         static_cast<difference_type>(other.get_index());
   }
 
   constexpr bool operator<(This const& other) const {
-    ASSERT(tree_ == other.tree_);
+    assert(tree_ == other.tree_);
     return get_index() < other.get_index();
   }
 
   constexpr bool operator>(This const& other) const {
-    ASSERT(tree_ == other.tree_);
+    assert(tree_ == other.tree_);
     return get_index() > other.get_index();
   }
 
   constexpr bool operator<=(This const& other) const {
-    ASSERT(tree_ == other.tree_);
+    assert(tree_ == other.tree_);
     return get_index() <= other.get_index();
   }
 
   constexpr bool operator>=(This const& other) const {
-    ASSERT(tree_ == other.tree_);
+    assert(tree_ == other.tree_);
     return get_index() >= other.get_index();
   }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <cstdint>
 #include <memory>
 #include <tuple>
@@ -28,7 +29,7 @@ struct AddPointerFromAllocator {
   template<class T>
   struct AddPointer {
     using type = typename std::allocator_traits<Allocator>::
-        template rebind_alloc<T>::pointer;
+        template rebind_traits<T>::pointer;
   };
 };
 
@@ -149,7 +150,7 @@ struct OrderedBinaryTreeNode {
   template<class... Args>
   constexpr OrderedBinaryTreeNode(Args&&... args)
     : data(std::forward<Args>(args)...) {}
-  
+
   /**
    *  @brief
    *  Returns the `ChildType` of this node.
@@ -212,7 +213,7 @@ struct OrderedBinaryTreeNode {
   static constexpr CondThisPtr<constant> traverse_upwards(
       CondThisPtr<constant> n,
       FunctionType f) {
-    ASSERT(n);
+    assert(n);
     if (!f(n)) {
       return nullptr;
     }
@@ -444,7 +445,7 @@ struct OrderedBinaryTreeNode {
       }
       --index;
       n = n->right_child;
-      ASSERT(n);
+      assert(n);
     }
   }
 
@@ -471,7 +472,7 @@ struct OrderedBinaryTreeNode {
   template<bool constant>
   static constexpr CondThisPtr<constant> find_first_node(
       CondThisPtr<constant> n) {
-    ASSERT(n);
+    assert(n);
     for (; n->left_child; n = n->left_child) {}
     return n;
   }
@@ -499,7 +500,7 @@ struct OrderedBinaryTreeNode {
   template<bool constant>
   static constexpr CondThisPtr<constant> find_next_node(
       CondThisPtr<constant> n) {
-    ASSERT(n);
+    assert(n);
     if (n->right_child) {
       return n->right_child->find_first_node();
     }
@@ -544,7 +545,7 @@ struct OrderedBinaryTreeNode {
     if (steps < 0) {
       return find_prev_node<constant>(n, -steps);
     }
-    ASSERT(n);
+    assert(n);
     while (true) {
       if (steps == 0) {
         return n;
@@ -610,7 +611,7 @@ struct OrderedBinaryTreeNode {
   template<bool constant>
   static constexpr CondThisPtr<constant> find_last_node(
       CondThisPtr<constant> n) {
-    ASSERT(n);
+    assert(n);
     for (; n->right_child; n = n->right_child) {}
     return n;
   }
@@ -638,7 +639,7 @@ struct OrderedBinaryTreeNode {
   template<bool constant>
   static constexpr CondThisPtr<constant> find_prev_node(
       CondThisPtr<constant> n) {
-    ASSERT(n);
+    assert(n);
     if (n->left_child) {
       return n->left_child->find_last_node();
     }
@@ -683,7 +684,7 @@ struct OrderedBinaryTreeNode {
     if (steps < 0) {
       return find_next_node<constant>(n, -steps);
     }
-    ASSERT(n);
+    assert(n);
     while (true) {
       if (steps == 0) {
         return n;
@@ -862,10 +863,10 @@ struct OrderedBinaryTreeNode {
    */
   template<bool update_sizes = true>
   constexpr void link(InsertPosition const& pos) {
-    ASSERT(pos.node);
+    assert(pos.node);
     ThisPtr p{pos.node};
     if (pos.left_child) {
-      ASSERT(!p->left_child);
+      assert(!p->left_child);
       p->left_child = this;
       parent = p;
       if constexpr (update_sizes) {
@@ -873,7 +874,7 @@ struct OrderedBinaryTreeNode {
       }
       return;
     }
-    ASSERT(!p->right_child);
+    assert(!p->right_child);
     p->right_child = this;
     parent = p;
     if constexpr (update_sizes) {
@@ -889,20 +890,8 @@ struct OrderedBinaryTreeNode {
    */
   template<bool update_sizes = true>
   constexpr void link_at_index(size_type index, ThisPtr n) {
-    ASSERT(n);
+    assert(n);
     n->template link<update_sizes>(get_insert_position_for_index(index));
-  }
-
-  /**
-   *  @brief
-   *  Constructs a node with given arguments, adds it as the `index`-th node in
-   *    the subtree rooted at `this`, and returns the pointer to it.
-   */
-  template<bool update_sizes = true, class... Args>
-  constexpr ThisPtr emplace_at_index(size_type index, Args&&... args) {
-    ThisPtr n{new This(nullptr, std::forward<Args>(args)...)};
-    link_at_index<update_sizes>(index, n);
-    return n;
   }
 
   /**
@@ -949,7 +938,7 @@ struct OrderedBinaryTreeNode {
   constexpr std::pair<ThisPtr, InsertPosition> unlink_at_index(
       size_type index) {
     ThisPtr n{find_node_at_index(index)};
-    ASSERT(n);
+    assert(n);
     InsertPosition pos{n->template unlink<update_sizes>()};
     return {n, pos};
   }
@@ -968,7 +957,7 @@ struct OrderedBinaryTreeNode {
    *  (`parent` is guaranteed to be non-null.)
    */
   constexpr void rotate_left() {
-    ASSERT(right_child);
+    assert(right_child);
     ThisPtr p{parent};
     ChildType child_type{get_child_type()};
 
@@ -1004,7 +993,7 @@ struct OrderedBinaryTreeNode {
    *  (`parent` is guaranteed to be non-null.)
    */
   constexpr void rotate_right() {
-    ASSERT(left_child);
+    assert(left_child);
     ThisPtr p{parent};
     ChildType child_type{get_child_type()};
 
@@ -1040,7 +1029,7 @@ struct OrderedBinaryTreeNode {
    *    `this`.
    */
   constexpr ThisPtr splay_1() {
-    ASSERT(parent);
+    assert(parent);
     ThisPtr p{parent};
     ChildType child_type{get_child_type()};
     if (child_type == kLeftChild) {
@@ -1069,8 +1058,8 @@ struct OrderedBinaryTreeNode {
    *    update the `first` component of the return value before `second`.
    */
   constexpr std::pair<ThisPtr, ThisPtr> splay_2() {
-    ASSERT(parent);
-    ASSERT(parent->parent);
+    assert(parent);
+    assert(parent->parent);
     ThisPtr p{parent};
     ThisPtr pp{p->parent};
     ThisPtr ppp{pp->parent};
@@ -1166,7 +1155,7 @@ struct OrderedBinaryTreeNode {
    */
   template<class FunctionType>
   constexpr void splay(FunctionType f, ThisPtr top = nullptr) {
-    ASSERT(!top || is_under(top));
+    assert(!top || is_under(top));
     while (parent != top) {
       if (parent->parent != top) {
         std::pair<ThisPtr, ThisPtr> pp_p{splay_2()};
@@ -1204,7 +1193,7 @@ struct OrderedBinaryTreeNode {
    *    actually moving `data`.
    */
   constexpr void swap(ThisPtr n) {
-    ASSERT(n);
+    assert(n);
     std::swap(size, n->size);
     ChildType child_type{get_child_type()};
     ChildType n_child_type{n->get_child_type()};
@@ -1304,14 +1293,14 @@ struct OrderedBinaryTreeNode {
     }
 
     ThisPtr next{find_next_node()};
-    ASSERT(next);
+    assert(next);
     swap(next);
-    ASSERT(parent);
+    assert(parent);
     ChildType child_type{get_child_type()};
     if (child_type == kLeftChild) {
       parent->left_child = right_child;
     } else {
-      ASSERT(child_type == kRightChild);
+      assert(child_type == kRightChild);
       parent->right_child = right_child;
     }
     if (right_child) {
