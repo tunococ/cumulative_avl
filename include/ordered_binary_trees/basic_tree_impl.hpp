@@ -122,7 +122,7 @@ struct BasicTreeImpl {
       InputIterator input_i,
       InputIterator input_end) {
     if (input_i == input_end) {
-      return nullptr;
+      return node;
     }
     NodePtr first_new_node{emplace_node_before(tree, node, *input_i)};
     node = first_new_node;
@@ -134,11 +134,33 @@ struct BasicTreeImpl {
     return first_new_node;
   }
 
+  /**
+   *  @brief
+   *  Clears the tree and assigns values from `[input_begin, input_end)` to the
+   *    tree.
+   */
+  template<class InputIterator>
+  static constexpr void assign(
+      Tree& tree,
+      InputIterator input_begin,
+      InputIterator input_end) {
+    tree.destroy_all_nodes();
+    insert_nodes_before(tree, tree.first, input_begin, input_end);
+  }
+
+  /**
+   *  @brief
+   *  Erases the first node.
+   */
   static constexpr void erase_front(Tree& tree) {
     assert(!tree.empty());
     tree.template erase<true, true>(tree.first);
   }
 
+  /**
+   *  @brief
+   *  Erases the last node.
+   */
   static constexpr void erase_back(Tree& tree) {
     assert(!tree.empty());
     tree.template erase<true, true>(tree.last);

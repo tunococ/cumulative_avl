@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <iostream>
 #include <iterator>
+#include <random>
 #include <sstream>
 #include <string>
 #include <tuple>
@@ -290,4 +291,254 @@ TEMPLATE_LIST_TEST_CASE("ManagedTree - erase", "", TreeImpls) {
     }
   }
 
+}
+
+TEMPLATE_LIST_TEST_CASE("ManagedTree - random operations", "", TreeImpls) {
+  using Tree = obt::ManagedTree<TestType>;
+
+  Tree tree;
+  deque<Value> list;
+
+  auto read_only_check = [](auto& tree, auto& list) {
+    CHECK(equal(tree.begin(), tree.end(), list.begin(), list.end()));
+    CHECK(equal(tree.rbegin(), tree.rend(), list.rbegin(), list.rend()));
+    if (!tree.empty()) {
+      CHECK(tree.front() == list.front());
+      CHECK(tree.back() == list.back());
+
+      CHECK(tree.front() == *tree.get_front_iterator());
+      CHECK(tree.back() == *tree.get_back_iterator());
+
+      CHECK(tree.end() - 1 == tree.get_back_iterator());
+
+      CHECK(tree.back() == tree.rbegin()[0]);
+      CHECK(tree.front() == tree.rend()[-1]);
+    } else {
+      CHECK(tree.begin() == tree.end());
+    }
+    CHECK(tree.begin() == tree.get_front_iterator());
+    for (size_t index{0}; index < tree.size(); ++index) {
+      CHECK(tree.at(index) == list.at(index));
+      CHECK(tree[index] == list[index]);
+      CHECK(tree.get_iterator_at_index(index) == tree.begin() + index);
+      CHECK(*tree.get_iterator_at_index(index) == tree[index]);
+    }
+    CHECK(tree.get_iterator_at_index(tree.size()) == tree.end());
+
+    {
+      // Test copy constructor.
+      Tree tree_a{tree};
+      CHECK(equal(tree_a.begin(), tree_a.end(), list.begin(), list.end()));
+
+      // Test move constructor.
+      Tree tree_b{std::move(tree_a)};
+      CHECK(equal(tree_b.begin(), tree_b.end(), list.begin(), list.end()));
+      CHECK(tree_a.empty());
+
+      // Test copy assignment.
+      tree_a = tree;
+      CHECK(equal(tree_a.begin(), tree_a.end(), list.begin(), list.end()));
+      
+      // Test move assignment.
+      tree_b = std::move(tree_a);
+      CHECK(equal(tree_b.begin(), tree_b.end(), list.begin(), list.end()));
+      CHECK(tree_a.empty());
+
+      // Test clear.
+      CHECK(!tree_b.empty());
+      tree_b.clear();
+      CHECK(tree_b.empty());
+    }
+  };
+
+  static constexpr size_t kNumOperations{1000};
+  static constexpr size_t kMaxBulkSize{8};
+
+  std::mt19937_64 rand_gen{123456};
+  auto rand = [&rand_gen](size_t modulus) -> size_t {
+    return static_cast<size_t>(rand_gen() % modulus);
+  };
+
+  for (size_t counter{0}; counter < kNumOperations; ++counter) {
+    size_t op_1{rand(tree.empty() ? 4 : 6)};
+
+    switch (op_1) {
+      case 0: { // Add an element to one of the two ends.
+        size_t op_2{rand(8)};
+        switch (op_2) {
+          case 0: // push_front
+            cout << "push_front(" << counter << ")\n";
+            list.push_front(counter);
+            tree.push_front(counter);
+            CHECK(tree.front() == counter);
+            break;
+          case 1: // emplace_front
+            cout << "emplace_front(" << counter << ")\n";
+            list.emplace_front(counter);
+            tree.emplace_front(counter);
+            CHECK(tree.front() == counter);
+            break;
+          case 2: // insert to front
+            cout << "insert(begin(), " << counter << ")\n";
+            list.insert(list.begin(), counter);
+            CHECK(*tree.insert(tree.begin(), counter) == counter);
+            CHECK(tree.front() == counter);
+            break;
+          case 3: // emplace to front
+            cout << "emplace(begin(), " << counter << ")\n";
+            list.emplace(list.begin(), counter);
+            CHECK(*tree.emplace(tree.begin(), counter) == counter);
+            CHECK(tree.front() == counter);
+            break;
+          case 4: // push_back
+            cout << "push_back(" << counter << ")\n";
+            list.push_back(counter);
+            tree.push_back(counter);
+            CHECK(tree.back() == counter);
+            break;
+          case 5: // emplace_back
+            cout << "emplace_back(" << counter << ")\n";
+            list.emplace_back(counter);
+            tree.emplace_back(counter);
+            CHECK(tree.back() == counter);
+            break;
+          case 6: // insert to back
+            cout << "insert(end(), " << counter << ")\n";
+            list.insert(list.end(), counter);
+            CHECK(*tree.insert(tree.end(), counter) == counter);
+            CHECK(tree.back() == counter);
+            break;
+          case 7: // emplace to back
+            cout << "emplace(end(), " << counter << ")\n";
+            list.emplace(list.end(), counter);
+            CHECK(*tree.emplace(tree.end(), counter) == counter);
+            CHECK(tree.back() == counter);
+            break;
+          default:
+            CHECK(false);
+            break;
+        }
+        break;
+      }
+      case 1: { // Insert an element at a random index.
+        size_t op_2{rand(2)};
+        size_t index{rand(tree.size() + 1)};
+        switch (op_2) {
+          case 0: { // insert at index
+            cout << "insert(get_iterator_at_index("
+                << index << "), "
+                << counter << ")\n";
+            list.insert(list.begin() + index, counter);
+            auto it{tree.insert(tree.get_iterator_at_index(index), counter)};
+            CHECK(it == tree.get_iterator_at_index(index));
+            break;
+          }
+          case 1: { // emplace at index
+            cout << "emplace(get_iterator_at_index("
+                << index << "), "
+                << counter << ")\n";
+            list.emplace(list.begin() + index, counter);
+            auto it{tree.emplace(tree.get_iterator_at_index(index), counter)};
+            CHECK(it == tree.get_iterator_at_index(index));
+            break;
+          }
+          default:
+            CHECK(false);
+            break;
+        }
+        break;
+      }
+      case 2: { // Insert multiple elements at a random index.
+        size_t index{rand(tree.size() + 1)};
+        size_t size{rand(kMaxBulkSize + 1)};
+        vector<Value> list_to_insert;
+        for (size_t j{0}; j < size; ++j) {
+          list_to_insert.push_back(j + counter * kNumOperations);
+        }
+
+        if (size == 0) {
+          cout << "insert empty range at index " << index << "\n";
+        } else {
+          cout << "insert ["
+              << list_to_insert.front() << ".." << list_to_insert.back()
+              << "] at index " << index << "\n";
+        }
+        list.insert(list.begin() + index,
+            list_to_insert.begin(), list_to_insert.end());
+        auto it{
+            tree.insert(
+              tree.get_iterator_at_index(index),
+              list_to_insert.begin(),
+              list_to_insert.end())};
+        CHECK(it == tree.get_iterator_at_index(index));
+        break;
+      }
+      case 3: { // Erase a random interval of elements.
+        size_t begin{rand(tree.size())};
+        size_t length{rand(kMaxBulkSize)};
+        size_t end{min(begin + length, tree.size())};
+
+        cout << "erase an interval: [" << begin << ", " << end << ")\n";
+        auto end_it{tree.get_iterator_at_index(end)};
+        list.erase(list.begin() + begin, list.begin() + end);
+        CHECK(tree.erase(tree.get_iterator_at_index(begin), end_it) == end_it);
+        break;
+      }
+      case 4: { // Erase one element from one of the two ends.
+        REQUIRE(!tree.empty());
+        size_t op_2{rand(6)};
+        auto it_1{tree.get_iterator_at_index(1)};
+        auto it_end{tree.end()};
+        switch (op_2) {
+          case 0: // pop_front
+            cout << "pop_front()\n";
+            list.pop_front();
+            tree.pop_front();
+            break;
+          case 1: // erase at get_front_iterator()
+            cout << "erase(get_front_iterator())\n";
+            list.erase(list.begin());
+            CHECK(tree.erase(tree.get_front_iterator()) == it_1);
+            break;
+          case 2: // erase at begin()
+            cout << "erase(begin())\n";
+            list.erase(list.cbegin());
+            CHECK(tree.erase(tree.cbegin()) == it_1);
+            break;
+          case 3: // pop_back
+            cout << "pop_back()\n";
+            list.pop_back();
+            tree.pop_back();
+            break;
+          case 4: // erase at get_back_iterator()
+            cout << "erase(get_back_iterator())\n";
+            list.erase(std::prev(list.end()));
+            CHECK(tree.erase(tree.get_back_iterator()) == it_end);
+            break;
+          case 5: // erase at end() - 1
+            cout << "erase(end() - 1)\n";
+            list.erase(std::prev(list.cend()));
+            CHECK(tree.erase(std::prev(tree.cend())) == it_end);
+            break;
+          default:
+            CHECK(false);
+            break;
+        }
+        break;
+      }
+      case 5: { // Erase one element at a random index.
+        REQUIRE(!tree.empty());
+        size_t index{rand(tree.size())};
+
+        cout << "erase(get_iterator_at_index(" << index << "))\n";
+        auto it_next{tree.get_iterator_at_index(index + 1)};
+        list.erase(list.begin() + index);
+        CHECK(tree.erase(tree.get_iterator_at_index(index)) == it_next);
+        break;
+      }
+    }
+
+    read_only_check(tree, list);
+    read_only_check(const_cast<Tree const&>(tree), list);
+  }
 }

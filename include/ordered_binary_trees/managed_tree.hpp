@@ -71,6 +71,88 @@ class ManagedTree {
     return {&tree_, node};
   }
 
+  /**
+   *  @brief
+   *  Const-iterator type to facilitate initialization with repeated values.
+   * 
+   *  Conceptually, this can be viewed as an iterator into an infinite list
+   *    whose elements are all `value`.
+   */
+  template<class IndexT>
+  struct ValueRepeater {
+    /**
+     *  @brief
+     *  `Value const` is the `value_type` of this iterator because this
+     *    iterator does not allow the `value` to be modified.
+     */
+    using value_type = Value const;
+    /// `value_type&`.
+    using reference = value_type&;
+    /// `IndexT`.
+    using size_type = IndexT;
+    /// Signed version of `size_type`.
+    using difference_type = std::make_signed_t<size_type>;
+    /// The value to repeat.
+    value_type& value;
+    /// Index (counter).
+    size_type index;
+    /// Constructs an iterator that produces `value` repeatedly.
+    constexpr ValueRepeater(value_type const& value, size_type index)
+      : index{index}, value{value} {}
+    /// Returns `value`.
+    constexpr value_type& operator*() {
+      return value;
+    }
+    /// Returns `value`'s pointer.
+    constexpr value_type* operator->() {
+      return &value;
+    }
+    /// Pre-increments the iterator.
+    constexpr ValueRepeater& operator++() {
+      ++index;
+      return *this;
+    }
+    /// Post-increments the iterator.
+    constexpr ValueRepeater operator++(int) {
+      ValueRepeater output{value, index++};
+      return output;
+    }
+    /// Pre-decrements the iterator.
+    constexpr ValueRepeater& operator--() {
+      --index;
+      return *this;
+    }
+    /// Post-decrements the iterator.
+    constexpr ValueRepeater operator--(int) {
+      ValueRepeater output{value, index--};
+      return output;
+    }
+    /// Returns `true` if this iterator is equal to `other`.
+    constexpr bool operator==(ValueRepeater const& other) const {
+      return index == other.index;
+    }
+    /// Returns `true` if this iterator is not equal to `other`.
+    constexpr bool operator!=(ValueRepeater const& other) const {
+      return index != other.index;
+    }
+    /// Returns `true` if this iterator is greater than `other`.
+    constexpr bool operator>(ValueRepeater const& other) const {
+      return index > other.index;
+    }
+    /// Returns `true` if this iterator is greater than or equal to `other`.
+    constexpr bool operator>=(ValueRepeater const& other) const {
+      return index >= other.index;
+    }
+    /// Returns `true` if this iterator is less than `other`.
+    constexpr bool operator<(ValueRepeater const& other) const {
+      return index < other.index;
+    }
+    /// Returns `true` if this iterator is less than or equal to `other`.
+    constexpr bool operator<=(ValueRepeater const& other) const {
+      return index <= other.index;
+    }
+  };
+
  public:
   /// Type of *values*.
   using value_type = Value;
@@ -122,24 +204,31 @@ class ManagedTree {
 #endif
   /// Destroys the tree.
   ~ManagedTree() {
+    clear();
+  }
+
+  /// Empties the tree.
+  constexpr void clear() {
     tree_.destroy_all_nodes();
   }
 
   /// Clones the tree from `other`.
   constexpr This& operator=(This const& other) {
+    clear();
     tree_ = other.tree_.clone();
     return *this;
   }
 
   /// Takes the tree from `other`.
   constexpr This& operator=(This&& other) {
+    clear();
     tree_ = std::move(other.tree_);
     return *this;
   }
 
-  /// Empties the tree.
-  constexpr void clear() {
-    tree_.destroy_all_nodes();
+  /// Swaps this tree with `other`.
+  constexpr void swap(This& other) {
+    std::swap(tree_, other.tree_);
   }
 
   /// Returns the number of elements in the tree.
@@ -155,6 +244,34 @@ class ManagedTree {
   /// Returns the allocator.
   constexpr allocator_type get_allocator() const noexcept {
     return tree_.allocator;
+  }
+
+  /**
+   *  @brief
+   *  Clears the tree and assigns values from `[first, last)` to the tree.
+   */
+  template<class InputIterator>
+  constexpr void assign(InputIterator first, InputIterator last) {
+    TreeImpl::assign(tree_, first, last);
+  }
+
+  /**
+   *  @brief
+   *  Clears the tree and assigns values from `ilist` to the tree.
+   */
+  template<class V>
+  constexpr void assign(std::initializer_list<V> ilist) {
+    assign(ilist.begin(), ilist.end());
+  }
+
+  /**
+   *  @brief
+   *  Clears the tree and assigns `n` copies of `value` to the tree.
+   */
+  constexpr void assign(size_type n, value_type const& value) {
+    assign(
+        ValueRepeater<size_type>{value, 0},
+        ValueRepeater<size_type>{value, n});
   }
 
   /**
