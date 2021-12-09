@@ -54,15 +54,32 @@ struct BasicTreeImpl {
   /// Type of trees.
   using Tree = OrderedBinaryTree<Node, Allocator>;
 
+  /// Type of indices.
+  using size_type = typename Tree::size_type;
+
   /**
    *  @brief
    *  Struct or class that contains a public static function to convert `Data&`
    *    to `Value&`.
+   *
+   *  In this basic implementation, `DefaultExtractValue`, which provides the
+   *    identity function, suffices.
    */
   using ExtractValue = DefaultExtractValue<Node>;
 
   /// Type of node pointers.
   using NodePtr = typename Tree::NodePtr;
+
+  /// `Tree::InsertPosition`.
+  using InsertPosition = typename Tree::InsertPosition;
+
+  /**
+   *  @brief
+   *  Returns the node at a given index.
+   */
+  static constexpr NodePtr find_node_at_index(Tree& tree, size_type index) {
+    return tree.find_node_at_index(index);
+  }
 
   /**
    *  @brief
@@ -71,7 +88,9 @@ struct BasicTreeImpl {
   template<class... Args>
   static constexpr NodePtr emplace_front(Tree& tree, Args&&... args) {
     return tree.emplace(
-        tree.first->make_insert_position(true),
+        tree.first ?
+          tree.first->make_insert_position(true) :
+          InsertPosition{},
         std::forward<Args>(args)...);
   }
 
@@ -82,7 +101,9 @@ struct BasicTreeImpl {
   template<class... Args>
   static constexpr NodePtr emplace_back(Tree& tree, Args&&... args) {
     return tree.emplace(
-        tree.last->make_insert_position(false),
+        tree.last ?
+          tree.last->make_insert_position(false) :
+          InsertPosition{},
         std::forward<Args>(args)...);
   }
 
@@ -132,6 +153,40 @@ struct BasicTreeImpl {
       tree.link(pos, node);
     }
     return first_new_node;
+  }
+
+  /**
+   *  @brief
+   *  Takes data from `other` and inserts them at `pos` in `tree`, then returns
+   *    the node that was the first node of `other`.
+   *  The ownership of all the nodes in `other` is transferred to `tree`
+   *    afterwards.
+   *
+   *  This function does not alter `tree.allocator` or `other.allocator`.
+   *  If `tree.allocator` cannot deallocate nodes created by `other.allocator`,
+   *    the behavior will be undefined.
+   */
+  static constexpr NodePtr join(Tree& tree, InsertPosition pos, Tree& other) {
+    NodePtr n{other.first};
+    tree.link(pos, other.root);
+    other.clear();
+    return n;
+  }
+
+  /**
+   *  @brief
+   *  Similar to `join(tree, tree.get_first_insert_position(), other)`.
+   */
+  static constexpr NodePtr join_front(Tree& tree, Tree& other) {
+    return join(tree, tree.get_first_insert_position(), other);
+  }
+
+  /**
+   *  @brief
+   *  Similar to `join(tree, tree.get_last_insert_position(), other)`.
+   */
+  static constexpr NodePtr join_back(Tree& tree, Tree& other) {
+    return join(tree, tree.get_last_insert_position(), other);
   }
 
   /**

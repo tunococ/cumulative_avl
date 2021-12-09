@@ -85,7 +85,7 @@ struct OrderedBinaryTree {
    *  Creates a binary tree with a given allocator and a given root.
    */
   constexpr OrderedBinaryTree(
-      Allocator allocator = Allocator(),
+      Allocator const& allocator = Allocator(),
       NodePtr root = nullptr)
     : allocator{allocator},
       root{root},
@@ -102,7 +102,8 @@ struct OrderedBinaryTree {
   template<class OtherNode, class OtherAllocator>
   constexpr OrderedBinaryTree(
       OrderedBinaryTree<OtherNode, OtherAllocator> const& other)
-    : allocator{other.allocator},
+    : allocator{std::allocator_traits<Allocator>::
+        select_on_container_copy_construction(other.allocator)},
       root{other.root},
       first{other.first},
       last{other.last} {
@@ -115,7 +116,7 @@ struct OrderedBinaryTree {
   template<class OtherNode, class OtherAllocator>
   constexpr OrderedBinaryTree(
       OrderedBinaryTree<OtherNode, OtherAllocator>&& other)
-    : allocator{other.allocator},
+    : allocator{std::move(other.allocator)},
       root{other.root},
       first{other.first},
       last{other.last} {
@@ -124,28 +125,44 @@ struct OrderedBinaryTree {
 
   /**
    *  @brief
-   *  Copies everything from another tree.
+   *  Copies everything (excluding `allocator`) from another tree.
    *
    *  This copy assignment abandons the current tree and copies all members
    *    from another tree.
-   *  It is useful only in a very special situation such as when the current
-   *    tree is empty and the other tree will be abandoned.
+   *  It is useful only in a very special situation where ownerships of nodes
+   *    will be handled manually.
    */
-  This& operator=(This const&) = default;
+  constexpr This& operator=(This const& other) {
+    root = other.root;
+    first = other.first;
+    last = other.last;
+    return *this;
+  }
 
   /**
    *  @brief
-   *  Takes everything from another tree.
+   *  Takes everything (excluding `allocator`) from another tree.
    *
    *  This move assignment abandons the current tree and takes all members from
    *    another tree.
    */
-  This& operator=(This&& other) {
+  constexpr This& operator=(This&& other) {
     root = other.root;
     first = other.first;
     last = other.last;
     other.clear();
     return *this;
+  }
+
+  /**
+   *  @brief
+   *  Swaps contents of the tree (excluding `allocator`) with another tree.
+   */
+  constexpr void swap(This& other) {
+    using std::swap;
+    swap(root, other.root);
+    swap(first, other.first);
+    swap(last, other.last);
   }
 
   /**
@@ -182,54 +199,6 @@ struct OrderedBinaryTree {
     NodePtr r{root};
     clear();
     return r;
-  }
-
-  /**
-   *  @brief
-   *  Convenience operator for accessing `root`.
-   */
-  constexpr NodePtr operator->() {
-    return root;
-  }
-
-  /**
-   *  @brief
-   *  Convenience operator for accessing `root`.
-   */
-  constexpr ConstNodePtr operator->() const {
-    return root;
-  }
-
-  /**
-   *  @brief
-   *  Convenience operator for accessing `root`.
-   */
-  constexpr Node& operator*() {
-    return *root;
-  }
-
-  /**
-   *  @brief
-   *  Convenience operator for accessing `root`.
-   */
-  constexpr Node const& operator*() const {
-    return *root;
-  }
-
-  /**
-   *  @brief
-   *  Convenience operator for accessing `root`.
-   */
-  constexpr operator NodePtr() {
-    return root;
-  }
-
-  /**
-   *  @brief
-   *  Convenience operator for accessing `root`.
-   */
-  constexpr operator ConstNodePtr() const {
-    return root;
   }
 
   /**
@@ -330,7 +299,28 @@ struct OrderedBinaryTree {
    *  Clones the tree.
    */
   constexpr This clone() const {
-    return This{allocator, root ? clone_nodes(root) : nullptr};
+    return This{
+        std::allocator_traits<Allocator>::
+          select_on_container_copy_construction(allocator),
+        root ? clone_nodes(root) : nullptr};
+  }
+
+  /**
+   *  @brief
+   *  Clones from another tree rooted at `n`.
+   *
+   *  If `destroy_nodes` is `true`, `destroy_all_nodes()` will be called prior
+   *    to the clone operation.
+   *  Otherwise, the current tree will be abandoned without a cleanup.
+   */
+  template<bool destroy_nodes = true>
+  constexpr void clone_from(ConstNodePtr n) {
+    if constexpr (destroy_nodes) {
+      destroy_all_nodes();
+    }
+    root = clone_nodes(n);
+    first = root->find_first_node();
+    last = root->find_last_node();
   }
 
   /**
@@ -393,22 +383,24 @@ struct OrderedBinaryTree {
 
   /**
    *  @brief
-   *  Creates a node using the given allocator.
+   *  Creates a node using `allocator`.
    */
   template<class... Args>
   constexpr NodePtr create_node(Args&&... args) const {
-    NodePtr n{allocator.allocate(1)};
-    return new (static_cast<void*>(n)) Node{std::forward<Args>(args)...};
+    NodePtr n{std::allocator_traits<Allocator>::allocate(allocator, 1)};
+    std::allocator_traits<Allocator>::construct(allocator,
+        n, std::forward<Args>(args)...);
+    return n;
   }
 
   /**
    *  @brief
-   *  Destroys a node using the given allocator.
+   *  Destroys a node using `allocator`.
    */
   constexpr void destroy_node(NodePtr n) {
     assert(n);
-    std::destroy_at(n);
-    allocator.deallocate(n, 1);
+    std::allocator_traits<Allocator>::destroy(allocator, n);
+    std::allocator_traits<Allocator>::deallocate(allocator, n, 1);
   }
 
   /**
@@ -756,7 +748,7 @@ struct OrderedBinaryTree {
    *  @brief
    *  Calls `n1->swap(n2)` and updates `root` if it is involved in the swap.
    */
-  constexpr void swap(NodePtr n1, NodePtr n2) {
+  constexpr void swap_nodes(NodePtr n1, NodePtr n2) {
     if (n1 == n2) {
       return;
     }

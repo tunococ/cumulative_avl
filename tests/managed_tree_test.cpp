@@ -16,6 +16,7 @@
 #include <ordered_binary_trees/ordered_binary_tree.hpp>
 #include <ordered_binary_trees/ordered_binary_tree_node.hpp>
 #include <ordered_binary_trees/ordered_binary_tree_iterator.hpp>
+#include <ordered_binary_trees/splay_tree_impl.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_template_test_macros.hpp>
@@ -23,11 +24,21 @@
 namespace obt = ordered_binary_trees;
 using namespace std;
 
-using Value = size_t;
-using TreeImpls = tuple<
-    obt::BasicTreeImpl<Value>>;
+struct IndexRand {
+  mt19937_64 generator;
+  IndexRand(uint_fast64_t seed = 123456) : generator{seed} {}
+  size_t operator()(size_t modulus) {
+    return static_cast<size_t>(
+        generator() % static_cast<uint_fast64_t>(modulus));
+  }
+};
 
-TEMPLATE_LIST_TEST_CASE("ManagedTree - insertion", "", TreeImpls) {
+using Value = size_t;
+using TreeImpls = tuple<obt::BasicTreeImpl<Value>, obt::SplayTreeImpl<Value>>;
+
+TEMPLATE_LIST_TEST_CASE("ManagedTree - insertion",
+    "", TreeImpls) {
+  
   using Tree = obt::ManagedTree<TestType>;
 
   Tree tree;
@@ -72,7 +83,7 @@ TEMPLATE_LIST_TEST_CASE("ManagedTree - insertion", "", TreeImpls) {
           CHECK(i == *tree.emplace(tree.begin(), i));
           break;
         default:
-          CHECK(false);
+          REQUIRE(false);
           break;
       }
       CHECK(list.front() == tree.front());
@@ -104,7 +115,7 @@ TEMPLATE_LIST_TEST_CASE("ManagedTree - insertion", "", TreeImpls) {
           CHECK(i == *tree.emplace(tree_it, i));
           break;
         default:
-          CHECK(false);
+          REQUIRE(false);
           break;
       }
       CHECK(list.front() == tree.front());
@@ -118,7 +129,9 @@ TEMPLATE_LIST_TEST_CASE("ManagedTree - insertion", "", TreeImpls) {
   }
 }
 
-TEMPLATE_LIST_TEST_CASE("ManagedTree - element access", "", TreeImpls) {
+TEMPLATE_LIST_TEST_CASE("ManagedTree - element access",
+    "", TreeImpls) {
+  
   using Tree = obt::ManagedTree<TestType>;
 
   Tree tree;
@@ -163,7 +176,9 @@ TEMPLATE_LIST_TEST_CASE("ManagedTree - element access", "", TreeImpls) {
 
 }
 
-TEMPLATE_LIST_TEST_CASE("ManagedTree - bulk insertion", "", TreeImpls) {
+TEMPLATE_LIST_TEST_CASE("ManagedTree - bulk insertion",
+    "", TreeImpls) {
+  
   using Tree = obt::ManagedTree<TestType>;
 
   Tree tree;
@@ -198,7 +213,9 @@ TEMPLATE_LIST_TEST_CASE("ManagedTree - bulk insertion", "", TreeImpls) {
 
 }
 
-TEMPLATE_LIST_TEST_CASE("ManagedTree - erase", "", TreeImpls) {
+TEMPLATE_LIST_TEST_CASE("ManagedTree - erase",
+    "", TreeImpls) {
+  
   using Tree = obt::ManagedTree<TestType>;
 
   Tree tree;
@@ -293,7 +310,9 @@ TEMPLATE_LIST_TEST_CASE("ManagedTree - erase", "", TreeImpls) {
 
 }
 
-TEMPLATE_LIST_TEST_CASE("ManagedTree - random operations", "", TreeImpls) {
+TEMPLATE_LIST_TEST_CASE("ManagedTree - random single-tree operations",
+    "", TreeImpls) {
+  
   using Tree = obt::ManagedTree<TestType>;
 
   Tree tree;
@@ -354,10 +373,7 @@ TEMPLATE_LIST_TEST_CASE("ManagedTree - random operations", "", TreeImpls) {
   static constexpr size_t kNumOperations{1000};
   static constexpr size_t kMaxBulkSize{8};
 
-  std::mt19937_64 rand_gen{123456};
-  auto rand = [&rand_gen](size_t modulus) -> size_t {
-    return static_cast<size_t>(rand_gen() % modulus);
-  };
+  IndexRand rand{};
 
   for (size_t counter{0}; counter < kNumOperations; ++counter) {
     size_t op_1{rand(tree.empty() ? 4 : 6)};
@@ -415,7 +431,7 @@ TEMPLATE_LIST_TEST_CASE("ManagedTree - random operations", "", TreeImpls) {
             CHECK(tree.back() == counter);
             break;
           default:
-            CHECK(false);
+            REQUIRE(false);
             break;
         }
         break;
@@ -443,7 +459,7 @@ TEMPLATE_LIST_TEST_CASE("ManagedTree - random operations", "", TreeImpls) {
             break;
           }
           default:
-            CHECK(false);
+            REQUIRE(false);
             break;
         }
         break;
@@ -521,7 +537,7 @@ TEMPLATE_LIST_TEST_CASE("ManagedTree - random operations", "", TreeImpls) {
             CHECK(tree.erase(std::prev(tree.cend())) == it_end);
             break;
           default:
-            CHECK(false);
+            REQUIRE(false);
             break;
         }
         break;
@@ -540,5 +556,61 @@ TEMPLATE_LIST_TEST_CASE("ManagedTree - random operations", "", TreeImpls) {
 
     read_only_check(tree, list);
     read_only_check(const_cast<Tree const&>(tree), list);
+  }
+}
+
+TEMPLATE_LIST_TEST_CASE("ManagedTree - join",
+    "", TreeImpls) {
+  
+  using Tree = obt::ManagedTree<TestType>;
+
+  static constexpr size_t kLength{64};
+
+  Tree tree_1;
+  Tree tree_2;
+  deque<Value> list_1;
+  deque<Value> list_2;
+
+  for (size_t i{0}; i < kLength; ++i) {
+    tree_1.push_back(i);
+    list_1.push_back(i);
+    tree_2.push_back(i + kLength);
+    list_2.push_back(i + kLength);
+  }
+
+  SECTION("front") {
+    tree_1.join_front(tree_2);
+    CHECK(tree_2.empty());
+
+    list_1.insert(list_1.begin(), list_2.begin(), list_2.end());
+    CHECK(equal(
+        tree_1.begin(), tree_1.end(),
+        list_1.begin(), list_1.end()));
+  }
+
+  SECTION("back") {
+    tree_1.join_back(tree_2);
+    CHECK(tree_2.empty());
+
+    list_1.insert(list_1.end(), list_2.begin(), list_2.end());
+    CHECK(equal(
+        tree_1.begin(), tree_1.end(),
+        list_1.begin(), list_1.end()));
+  }
+
+  SECTION("middle") {
+    for (size_t i{0}; i <= tree_1.size(); ++i) {
+      Tree tree_a{tree_1};
+      Tree tree_b{tree_2};
+      
+      tree_a.join(tree_a.get_iterator_at_index(i), tree_b);
+      CHECK(tree_b.empty());
+
+      deque<Value> list_a{list_1};
+      list_a.insert(list_a.begin() + i, list_2.begin(), list_2.end());
+      CHECK(equal(
+          tree_a.begin(), tree_a.end(),
+          list_a.begin(), list_a.end()));
+    }
   }
 }

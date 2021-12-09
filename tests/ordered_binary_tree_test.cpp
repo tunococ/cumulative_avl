@@ -622,7 +622,7 @@ TEST_CASE("OrderedBinaryTree -- splay") {
   }
 }
 
-TEST_CASE("OrderedBinaryTree -- swap") {
+TEST_CASE("OrderedBinaryTree -- swap_nodes") {
   using Node = obt::OrderedBinaryTreeNode<string>;
   using Tree = obt::OrderedBinaryTree<Node>;
 
@@ -638,7 +638,7 @@ TEST_CASE("OrderedBinaryTree -- swap") {
 
       Node* n_i{tree.find_node_at_index(i)};
       Node* n_j{tree.find_node_at_index(j)};
-      tree.swap(n_i, n_j);
+      tree.swap_nodes(n_i, n_j);
 
       CHECK(tree_equals_list(tree, list));
     }

@@ -189,7 +189,7 @@ struct OrderedBinaryTreeNode {
 
   /**
    *  @brief
-   *  Returns `true` if `this` node is a descendant of `a`.
+   *  Returns `true` if `this` node is in a subtree rooted at `a`.
    */
   constexpr bool is_under(ConstThisPtr a) const {
     ConstThisPtr n{this};
@@ -203,13 +203,13 @@ struct OrderedBinaryTreeNode {
   }
 
   /**
-   *  @brief 
+   *  @brief
    *  Applies the unary function `f` to nodes along the path from `n` to the
    *    root, stopping if `f()` returns `false`.
    *  The return value of `traverse_upwards()` is the last node for which
    *    `f()` returns `true`.
    */
-  template<bool constant, class FunctionType>
+  template<bool constant = false, class FunctionType>
   static constexpr CondThisPtr<constant> traverse_upwards(
       CondThisPtr<constant> n,
       FunctionType f) {
@@ -295,7 +295,7 @@ struct OrderedBinaryTreeNode {
    * 
    *  `f` should be a unary operator that takes one argument of type `ThisPtr`.
    */
-  template<bool constant, class FunctionType>
+  template<bool constant = false, class FunctionType>
   static constexpr void traverse_inorder(
       CondThisPtr<constant> n,
       FunctionType f) {
@@ -332,7 +332,7 @@ struct OrderedBinaryTreeNode {
    * 
    *  `f` should be a unary operator that takes one argument of type `ThisPtr`.
    */
-  template<bool constant, class FunctionType>
+  template<bool constant = false, class FunctionType>
   static constexpr void traverse_postorder(
       CondThisPtr<constant> n,
       FunctionType f) {
@@ -369,7 +369,7 @@ struct OrderedBinaryTreeNode {
    * 
    *  `f` should be a unary operator that takes one argument of type `ThisPtr`.
    */
-  template<bool constant, class FunctionType>
+  template<bool constant = false, class FunctionType>
   static constexpr void traverse_preorder(
       CondThisPtr<constant> n,
       FunctionType f) {
@@ -421,7 +421,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Finds a node at a given integer `index` in a subtree rooted at `n`.
    */
-  template<bool constant>
+  template<bool constant = false>
   static constexpr CondThisPtr<constant> find_node_at_index(
       CondThisPtr<constant> n,
       size_type index) {
@@ -469,7 +469,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Finds the leftmost node in the subtree rooted at `n`.
    */
-  template<bool constant>
+  template<bool constant = false>
   static constexpr CondThisPtr<constant> find_first_node(
       CondThisPtr<constant> n) {
     assert(n);
@@ -497,7 +497,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Finds the node that would succeed `n` in an in-order traversal.
    */
-  template<bool constant>
+  template<bool constant = false>
   static constexpr CondThisPtr<constant> find_next_node(
       CondThisPtr<constant> n) {
     assert(n);
@@ -538,7 +538,7 @@ struct OrderedBinaryTreeNode {
    *  Finds the node that would be `steps` positions after `n` in an in-order
    *    traversal.
    */
-  template<bool constant>
+  template<bool constant = false>
   static constexpr CondThisPtr<constant> find_next_node(
       CondThisPtr<constant> n,
       size_type steps) {
@@ -608,7 +608,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Finds the rightmost node in the subtree rooted at `n`.
    */
-  template<bool constant>
+  template<bool constant = false>
   static constexpr CondThisPtr<constant> find_last_node(
       CondThisPtr<constant> n) {
     assert(n);
@@ -636,7 +636,7 @@ struct OrderedBinaryTreeNode {
    *  @brief
    *  Finds the node that would precede `n` in an in-order traversal.
    */
-  template<bool constant>
+  template<bool constant = false>
   static constexpr CondThisPtr<constant> find_prev_node(
       CondThisPtr<constant> n) {
     assert(n);
@@ -677,7 +677,7 @@ struct OrderedBinaryTreeNode {
    *  Finds the node that would be `steps` positions before `n` in an
    *    in-order traversal.
    */
-  template<bool constant>
+  template<bool constant = false>
   static constexpr CondThisPtr<constant> find_prev_node(
       CondThisPtr<constant> n,
       size_type steps) {
@@ -748,7 +748,7 @@ struct OrderedBinaryTreeNode {
    *  Unifies `find_next_node()` and `find_prev_node()` by allowing `steps` to
    *    be an arbitrary, possibly signed, integer type.
    */
-  template<bool constant, class Integer>
+  template<bool constant = false, class Integer>
   static constexpr CondThisPtr<constant> find_node_displaced_by(
       CondThisPtr<constant> n,
       Integer steps) {

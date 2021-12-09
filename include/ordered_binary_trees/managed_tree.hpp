@@ -189,59 +189,144 @@ class ManagedTree {
   /// Type of const-reverse-iterators.
   using const_reverse_iterator = p_iterator<true, true>;
 
-  /// Creates a tree with a given `allocator`.
-  constexpr ManagedTree(allocator_type allocator = allocator_type())
+  /**
+   *  @brief
+   *  Creates an empty tree with a given `allocator`.
+   */
+  constexpr ManagedTree(allocator_type const& allocator = allocator_type())
     : tree_{allocator} {}
 
-  /// Clones the tree from `other`.
-  constexpr ManagedTree(This const& other) : tree_{other.tree_.clone()} {}
+  /**
+   *  @brief
+   *  Copies data from another tree using the given `allocator`.
+   */
+  constexpr ManagedTree(This const& other, allocator_type const& allocator)
+    : tree_{allocator} {
+    if (other.tree_.root) {
+      tree_.template clone_from<false>(other.tree_.root);
+    }
+  }
 
-  /// Takes the tree from `other`.
-  constexpr ManagedTree(This&& other) : tree_{std::move(other.tree_)} {}
+  /**
+   *  @brief
+   *  Copies data from another tree. The allocator is copied via
+   *    `select_on_container_copy_construction()`.
+   */
+  constexpr ManagedTree(This const& other)
+    : tree_{std::allocator_traits<allocator_type>::
+        select_on_container_copy_construction(other.tree_.allocator)} {
+    if (other.tree_.root) {
+      tree_.template clone_from<false>(other.tree_.root);
+    }
+  }
+
+  /**
+   *  @brief
+   *  Copies data from another tree if `allocator != other.allocator`,
+   *    or takes ownership of the data from another tree otherwise.
+   */
+  constexpr ManagedTree(This&& other, allocator_type const& allocator)
+    : tree_{allocator} {
+    if (other.tree_.root) {
+      if (allocator != other.tree_.allocator) {
+        tree_.template clone_from<false>(other.tree_.root);
+      } else {
+        tree_ = std::move(other.tree_);
+      }
+    }
+  }
+
+  /**
+   *  @brief
+   *  Moves data from another tree.
+   */
+  constexpr ManagedTree(This&& other)
+    : tree_{std::move(other.tree_.allocator)} {
+    tree_ = std::move(other.tree_);
+  }
 
 #if __cplusplus >= 202000L
   constexpr
 #endif
-  /// Destroys the tree.
+  /**
+   *  @brief
+   *  Destroys the tree.
+   */
   ~ManagedTree() {
     clear();
   }
 
-  /// Empties the tree.
+  /**
+   *  @brief
+   *  Empties the tree.
+   */
   constexpr void clear() {
     tree_.destroy_all_nodes();
   }
 
-  /// Clones the tree from `other`.
+  /**
+   *  @brief
+   *  Clones the tree from `other`.
+   */
   constexpr This& operator=(This const& other) {
     clear();
-    tree_ = other.tree_.clone();
+    if constexpr (std::allocator_traits<allocator_type>::
+        propagate_on_container_copy_assignment::value) {
+      tree_.allocator = other.tree_.allocator;
+    }
+    if (other.tree_.root) {
+      tree_.clone_from(other.tree_.root);
+    }
     return *this;
   }
 
-  /// Takes the tree from `other`.
+  /**
+   *  @brief
+   *  Takes the tree from `other`.
+   */
   constexpr This& operator=(This&& other) {
     clear();
+    if constexpr (std::allocator_traits<allocator_type>::
+        propagate_on_container_move_assignment::value) {
+      tree_.allocator = std::move(other.tree_.allocator);
+    }
     tree_ = std::move(other.tree_);
     return *this;
   }
 
-  /// Swaps this tree with `other`.
+  /**
+   *  @brief
+   *  Swaps this tree with `other`.
+   */
   constexpr void swap(This& other) {
-    std::swap(tree_, other.tree_);
+    if constexpr (std::allocator_traits<allocator_type>::
+        propagate_on_container_swap::value) {
+      using std::swap;
+      swap(tree_.allocator, other.tree_.allocator);
+    }
+    tree_.swap(other.tree_);
   }
 
-  /// Returns the number of elements in the tree.
+  /**
+   *  @brief
+   *  Returns the number of elements in the tree.
+   */
   constexpr size_type size() const {
     return tree_.size();
   }
 
-  /// Returns `true` iff the tree is empty.
+  /**
+   *  @brief
+   *  Returns `true` iff the tree is empty.
+   */
   constexpr bool empty() const {
     return tree_.empty();
   }
 
-  /// Returns the allocator.
+  /**
+   *  @brief
+   *  Returns the allocator.
+   */
   constexpr allocator_type get_allocator() const noexcept {
     return tree_.allocator;
   }
@@ -279,7 +364,8 @@ class ManagedTree {
    *  Accesses the `index`-th element.
    */
   constexpr reference operator[](size_type index) {
-    return ExtractValue::value_in_data(tree_.find_node_at_index(index)->data);
+    return ExtractValue::value_in_data(
+        TreeImpl::find_node_at_index(tree_, index)->data);
   }
 
   /**
@@ -287,7 +373,8 @@ class ManagedTree {
    *  Accesses the `index`-th element.
    */
   constexpr const_reference operator[](size_type index) const {
-    return ExtractValue::value_in_data(tree_.find_node_at_index(index)->data);
+    return ExtractValue::value_in_data(
+        TreeImpl::find_node_at_index(tree_, index)->data);
   }
 
   /**
@@ -447,7 +534,7 @@ class ManagedTree {
    *  This is equivalent to `begin() + index`, but may be more efficient.
    */
   constexpr iterator get_iterator_at_index(size_type index) {
-    return make_iterator(tree_.find_node_at_index(index));
+    return make_iterator(TreeImpl::find_node_at_index(tree_, index));
   }
 
   /**
@@ -457,7 +544,7 @@ class ManagedTree {
    *  This is equivalent to `cbegin() + index`, but may be more efficient.
    */
   constexpr const_iterator get_iterator_at_index(size_type index) const {
-    return make_iterator<true>(tree_.find_node_at_index(index));
+    return make_iterator<true>(TreeImpl::find_node_at_index(tree_, index));
   }
 
   /**
@@ -514,7 +601,7 @@ class ManagedTree {
   template<bool constant>
   constexpr iterator insert(p_iterator<constant> pos, Value const& value) {
     assert(pos.tree_ == &tree_);
-    return make_iterator<constant>(
+    return make_iterator(
         TreeImpl::emplace_node_before(tree_, pos.node_, value));
   }
 
@@ -526,7 +613,7 @@ class ManagedTree {
   template<bool constant>
   constexpr iterator insert(p_iterator<constant> pos, Value&& value) {
     assert(pos.tree_ == &tree_);
-    return make_iterator<constant>(
+    return make_iterator(
         TreeImpl::emplace_node_before(tree_, pos.node_, std::move(value)));
   }
 
@@ -538,7 +625,7 @@ class ManagedTree {
   template<bool constant, class... Args>
   constexpr iterator emplace(p_iterator<constant> pos, Args&&... args) {
     assert(pos.tree_ == &tree_);
-    return make_iterator<constant>(
+    return make_iterator(
         TreeImpl::emplace_node_before(
           tree_, pos.node_, std::forward<Args>(args)...));
   }
@@ -557,13 +644,58 @@ class ManagedTree {
       InputIterator first,
       InputIterator last) {
     assert(pos.tree_ == &tree_);
-    return make_iterator<constant>(
+    return make_iterator(
         TreeImpl::insert_nodes_before(tree_, pos.node_, first, last));
   }
 
   /**
    *  @brief
-   *  Inserts a value as the first element.
+   *  Takes data from `other` and inserts them right before `pos`, then returns
+   *    an iterator to the node that the first element of `other` ends up at.
+   *
+   *  `join()` will move nodes from the `other` tree into this tree at the
+   *    position immediately before `pos`.
+   *  This is similar to `insert(pos, other.begin(), other.end())` followed by
+   *    `other.clear()`, but may be more efficient.
+   *
+   *  The allocators in `this` and `other` must be compatible in the sense that
+   *    all allocations done by `other` must be deallocatable by `this`.
+   *  Otherwise, the behavior will be undefined.
+   */
+  template<bool constant>
+  constexpr iterator join(p_iterator<constant> pos, This& other) {
+    assert(pos.tree_ == &tree_);
+    assert(tree_.allocator == other.tree_.allocator);
+    return make_iterator(
+        TreeImpl::join(
+          tree_,
+          pos.node_ ?
+            pos.node_->get_prev_insert_position() :
+            tree_.get_last_insert_position(),
+          other.tree_));
+  }
+
+  /**
+   *  @brief
+   *  Similar to `join(begin(), other)`.
+   */
+  constexpr iterator join_front(This& other) {
+    assert(tree_.allocator == other.tree_.allocator);
+    return make_iterator(TreeImpl::join_front(tree_, other.tree_));
+  }
+
+  /**
+   *  @brief
+   *  Similar to `join(end(), other)`.
+   */
+  constexpr iterator join_back(This& other) {
+    assert(tree_.allocator == other.tree_.allocator);
+    return make_iterator(TreeImpl::join_back(tree_, other.tree_));
+  }
+
+  /**
+   *  @brief
+   *  Inserts `value` as the first element.
    */
   constexpr void push_front(Value const& value) {
     TreeImpl::emplace_front(tree_, value);
@@ -571,7 +703,7 @@ class ManagedTree {
   
   /**
    *  @brief
-   *  Inserts a value as the first element.
+   *  Inserts `value` as the first element.
    */
   constexpr void push_front(Value&& value) {
     TreeImpl::emplace_front(tree_, std::move(value));
@@ -588,7 +720,7 @@ class ManagedTree {
   
   /**
    *  @brief
-   *  Inserts a value as the last element.
+   *  Inserts `value` as the last element.
    */
   constexpr void push_back(Value const& value) {
     TreeImpl::emplace_back(tree_, value);
@@ -596,7 +728,7 @@ class ManagedTree {
 
   /**
    *  @brief
-   *  Inserts a value as the last element.
+   *  Inserts `value` as the last element.
    */
   constexpr void push_back(Value&& value) {
     TreeImpl::emplace_back(tree_, std::move(value));
