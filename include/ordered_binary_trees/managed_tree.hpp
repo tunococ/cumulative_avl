@@ -595,6 +595,18 @@ class ManagedTree {
 
   /**
    *  @brief
+   *  Converts a const-iterator to a regular iterator.
+   *
+   *  This function works on reverse iterators also.
+   */
+  template<bool constant = false, bool reverse = false>
+  p_iterator<false, reverse> make_mutable_iterator(
+      p_iterator<constant, reverse> it) const {
+    return {it.tree_, it.node_};
+  }
+
+  /**
+   *  @brief
    *  Inserts `value` right before `pos` and returns the iterator to the newly
    *    inserted value.
    */
@@ -650,8 +662,10 @@ class ManagedTree {
 
   /**
    *  @brief
-   *  Takes data from `other` and inserts them right before `pos`, then returns
-   *    an iterator to the node that the first element of `other` ends up at.
+   *  Takes data from `other` and inserts them right before `pos`;
+   *    then returns an iterator to the node that the first element of `other`
+   *    ends up at, or simply returns the non-const version of `pos` if `other`
+   *    is empty.
    *
    *  `join()` will move nodes from the `other` tree into this tree at the
    *    position immediately before `pos`.
@@ -666,13 +680,17 @@ class ManagedTree {
   constexpr iterator join(p_iterator<constant> pos, This& other) {
     assert(pos.tree_ == &tree_);
     assert(tree_.allocator == other.tree_.allocator);
-    return make_iterator(
-        TreeImpl::join(
-          tree_,
-          pos.node_ ?
-            pos.node_->get_prev_insert_position() :
-            tree_.get_last_insert_position(),
-          other.tree_));
+    if (other.empty()) {
+      return make_iterator(pos.node_);
+    }
+    NodePtr n{other.tree_.first};
+    TreeImpl::join(
+        tree_,
+        pos.node_ ?
+          pos.node_->get_prev_insert_position() :
+          tree_.get_last_insert_position(),
+        other.tree_);
+    return make_iterator(n);
   }
 
   /**
@@ -681,7 +699,12 @@ class ManagedTree {
    */
   constexpr iterator join_front(This& other) {
     assert(tree_.allocator == other.tree_.allocator);
-    return make_iterator(TreeImpl::join_front(tree_, other.tree_));
+    if (other.empty()) {
+      return make_iterator(tree_.first);
+    }
+    NodePtr n{other.tree_.first};
+    TreeImpl::join_front(tree_, other.tree_);
+    return make_iterator(n);
   }
 
   /**
@@ -690,7 +713,12 @@ class ManagedTree {
    */
   constexpr iterator join_back(This& other) {
     assert(tree_.allocator == other.tree_.allocator);
-    return make_iterator(TreeImpl::join_back(tree_, other.tree_));
+    if (other.empty()) {
+      return make_iterator(nullptr);
+    }
+    NodePtr n{other.tree_.first};
+    TreeImpl::join_back(tree_, other.tree_);
+    return make_iterator(n);
   }
 
   /**

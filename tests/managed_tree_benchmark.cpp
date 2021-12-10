@@ -161,7 +161,7 @@ TEMPLATE_LIST_TEST_CASE("ManagedTree benchmark - insert and erase",
     deque<Value> list;
     for (size_t i{0}; i < kChunkSize; ++i) {
       list.push_back(i);
-    })
+    }
     meter.measure([&tree, &rand, &list]() {
           tree.insert(
               tree.get_iterator_at_index(rand(kInitialSize + 1)),
@@ -241,21 +241,39 @@ TEMPLATE_LIST_TEST_CASE(
           break;
         }
         case 2: { // Insert multiple elements at a random index.
+          size_t op_2{rand(2)};
           size_t index{rand(tree.size() + 1)};
           size_t size{rand(kMaxBulkSize + 1)};
-          vector<Value> list_to_insert;
-          for (size_t j{0}; j < size; ++j) {
-            list_to_insert.push_back(j + counter * kNumOperations);
+          switch (op_2) {
+            case 0: { // insert
+              vector<Value> list_to_insert;
+              for (size_t j{0}; j < size; ++j) {
+                list_to_insert.push_back(j + counter);
+              }
+              tree.insert(
+                  tree.get_iterator_at_index(index),
+                  list_to_insert.begin(),
+                  list_to_insert.end());
+              break;
+            }
+            case 1: { // join
+              Tree tree_to_insert;
+              for (size_t j{0}; j < size; ++j) {
+                tree_to_insert.push_back(j + counter);
+              }
+              tree.join(
+                  tree.get_iterator_at_index(index),
+                  tree_to_insert);
+              break;
+            }
+            default:
+              REQUIRE(false);
+              break;
           }
-
-          tree.insert(
-              tree.get_iterator_at_index(index),
-              list_to_insert.begin(),
-              list_to_insert.end());
           break;
         }
         case 3: { // Erase a random interval of elements.
-          size_t begin{rand(tree.size())};
+          size_t begin{rand(tree.size() + 1)};
           size_t length{rand(kMaxBulkSize)};
           size_t end{min(begin + length, tree.size())};
 

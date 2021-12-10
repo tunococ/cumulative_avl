@@ -307,10 +307,87 @@ TEMPLATE_LIST_TEST_CASE("ManagedTree - erase",
       }
     }
   }
-
 }
 
-TEMPLATE_LIST_TEST_CASE("ManagedTree - random single-tree operations",
+TEMPLATE_LIST_TEST_CASE("ManagedTree - join",
+    "", TreeImpls) {
+  
+  using Tree = obt::ManagedTree<TestType>;
+
+  static constexpr size_t kLength{64};
+
+  Tree tree_1;
+  Tree tree_2;
+  Tree tree_3; // Empty tree
+  deque<Value> list_1;
+  deque<Value> list_2;
+
+  for (size_t i{0}; i < kLength; ++i) {
+    tree_1.push_back(i);
+    list_1.push_back(i);
+    tree_2.push_back(i + kLength);
+    list_2.push_back(i + kLength);
+  }
+
+  SECTION("front") {
+    auto it{tree_1.join_front(tree_2)};
+    CHECK(it == tree_1.get_iterator_at_index(0));
+    CHECK(tree_2.empty());
+
+    list_1.insert(list_1.begin(), list_2.begin(), list_2.end());
+    CHECK(equal(
+        tree_1.begin(), tree_1.end(),
+        list_1.begin(), list_1.end()));
+    
+    it = tree_1.join_front(tree_3);
+    CHECK(it == tree_1.begin());
+    CHECK(equal(
+        tree_1.begin(), tree_1.end(),
+        list_1.begin(), list_1.end()));
+  }
+
+  SECTION("back") {
+    auto it{tree_1.join_back(tree_2)};
+    CHECK(it == tree_1.get_iterator_at_index(kLength));
+    CHECK(tree_2.empty());
+
+    list_1.insert(list_1.end(), list_2.begin(), list_2.end());
+    CHECK(equal(
+        tree_1.begin(), tree_1.end(),
+        list_1.begin(), list_1.end()));
+
+    it = tree_1.join_back(tree_3);
+    CHECK(it == tree_1.end());
+    CHECK(equal(
+        tree_1.begin(), tree_1.end(),
+        list_1.begin(), list_1.end()));
+  }
+
+  SECTION("middle") {
+    for (size_t i{0}; i <= tree_1.size(); ++i) {
+      Tree tree_a{tree_1};
+      Tree tree_b{tree_2};
+      
+      auto it{tree_a.join(tree_a.get_iterator_at_index(i), tree_b)};
+      CHECK(it == tree_a.get_iterator_at_index(i));
+      CHECK(tree_b.empty());
+
+      deque<Value> list_a{list_1};
+      list_a.insert(list_a.begin() + i, list_2.begin(), list_2.end());
+      CHECK(equal(
+          tree_a.begin(), tree_a.end(),
+          list_a.begin(), list_a.end()));
+
+      it = tree_a.join(tree_a.get_iterator_at_index(i), tree_3);
+      CHECK(it == tree_a.get_iterator_at_index(i));
+      CHECK(equal(
+          tree_a.begin(), tree_a.end(),
+          list_a.begin(), list_a.end()));
+    }
+  }
+}
+
+TEMPLATE_LIST_TEST_CASE("ManagedTree - random operations",
     "", TreeImpls) {
   
   using Tree = obt::ManagedTree<TestType>;
@@ -364,7 +441,9 @@ TEMPLATE_LIST_TEST_CASE("ManagedTree - random single-tree operations",
       CHECK(tree_a.empty());
 
       // Test clear.
-      CHECK(!tree_b.empty());
+      if (!tree.empty()) {
+        CHECK(!tree_b.empty());
+      }
       tree_b.clear();
       CHECK(tree_b.empty());
     }
@@ -375,65 +454,66 @@ TEMPLATE_LIST_TEST_CASE("ManagedTree - random single-tree operations",
 
   IndexRand rand{};
 
+  size_t value{0};
   for (size_t counter{0}; counter < kNumOperations; ++counter) {
     size_t op_1{rand(tree.empty() ? 4 : 6)};
-
     switch (op_1) {
       case 0: { // Add an element to one of the two ends.
         size_t op_2{rand(8)};
         switch (op_2) {
           case 0: // push_front
-            cout << "push_front(" << counter << ")\n";
-            list.push_front(counter);
-            tree.push_front(counter);
-            CHECK(tree.front() == counter);
+            cout << "push_front(" << value << ")\n";
+            list.push_front(value);
+            tree.push_front(value);
+            CHECK(tree.front() == value);
             break;
           case 1: // emplace_front
-            cout << "emplace_front(" << counter << ")\n";
-            list.emplace_front(counter);
-            tree.emplace_front(counter);
-            CHECK(tree.front() == counter);
+            cout << "emplace_front(" << value << ")\n";
+            list.emplace_front(value);
+            tree.emplace_front(value);
+            CHECK(tree.front() == value);
             break;
           case 2: // insert to front
-            cout << "insert(begin(), " << counter << ")\n";
-            list.insert(list.begin(), counter);
-            CHECK(*tree.insert(tree.begin(), counter) == counter);
-            CHECK(tree.front() == counter);
+            cout << "insert(begin(), " << value << ")\n";
+            list.insert(list.begin(), value);
+            CHECK(*tree.insert(tree.begin(), value) == value);
+            CHECK(tree.front() == value);
             break;
           case 3: // emplace to front
-            cout << "emplace(begin(), " << counter << ")\n";
-            list.emplace(list.begin(), counter);
-            CHECK(*tree.emplace(tree.begin(), counter) == counter);
-            CHECK(tree.front() == counter);
+            cout << "emplace(begin(), " << value << ")\n";
+            list.emplace(list.begin(), value);
+            CHECK(*tree.emplace(tree.begin(), value) == value);
+            CHECK(tree.front() == value);
             break;
           case 4: // push_back
-            cout << "push_back(" << counter << ")\n";
-            list.push_back(counter);
-            tree.push_back(counter);
-            CHECK(tree.back() == counter);
+            cout << "push_back(" << value << ")\n";
+            list.push_back(value);
+            tree.push_back(value);
+            CHECK(tree.back() == value);
             break;
           case 5: // emplace_back
-            cout << "emplace_back(" << counter << ")\n";
-            list.emplace_back(counter);
-            tree.emplace_back(counter);
-            CHECK(tree.back() == counter);
+            cout << "emplace_back(" << value << ")\n";
+            list.emplace_back(value);
+            tree.emplace_back(value);
+            CHECK(tree.back() == value);
             break;
           case 6: // insert to back
-            cout << "insert(end(), " << counter << ")\n";
-            list.insert(list.end(), counter);
-            CHECK(*tree.insert(tree.end(), counter) == counter);
-            CHECK(tree.back() == counter);
+            cout << "insert(end(), " << value << ")\n";
+            list.insert(list.end(), value);
+            CHECK(*tree.insert(tree.end(), value) == value);
+            CHECK(tree.back() == value);
             break;
           case 7: // emplace to back
-            cout << "emplace(end(), " << counter << ")\n";
-            list.emplace(list.end(), counter);
-            CHECK(*tree.emplace(tree.end(), counter) == counter);
-            CHECK(tree.back() == counter);
+            cout << "emplace(end(), " << value << ")\n";
+            list.emplace(list.end(), value);
+            CHECK(*tree.emplace(tree.end(), value) == value);
+            CHECK(tree.back() == value);
             break;
           default:
             REQUIRE(false);
             break;
         }
+        ++value;
         break;
       }
       case 1: { // Insert an element at a random index.
@@ -443,18 +523,71 @@ TEMPLATE_LIST_TEST_CASE("ManagedTree - random single-tree operations",
           case 0: { // insert at index
             cout << "insert(get_iterator_at_index("
                 << index << "), "
-                << counter << ")\n";
-            list.insert(list.begin() + index, counter);
-            auto it{tree.insert(tree.get_iterator_at_index(index), counter)};
+                << value << ")\n";
+            list.insert(list.begin() + index, value);
+            auto it{tree.insert(tree.get_iterator_at_index(index), value)};
             CHECK(it == tree.get_iterator_at_index(index));
+            CHECK(*it == value);
             break;
           }
           case 1: { // emplace at index
             cout << "emplace(get_iterator_at_index("
                 << index << "), "
-                << counter << ")\n";
-            list.emplace(list.begin() + index, counter);
-            auto it{tree.emplace(tree.get_iterator_at_index(index), counter)};
+                << value << ")\n";
+            list.emplace(list.begin() + index, value);
+            auto it{tree.emplace(tree.get_iterator_at_index(index), value)};
+            CHECK(it == tree.get_iterator_at_index(index));
+            CHECK(*it == value);
+            break;
+          }
+          default:
+            REQUIRE(false);
+            break;
+        }
+        ++value;
+        break;
+      }
+      case 2: { // Insert multiple elements at a random index.
+        size_t op_2{rand(2)};
+        size_t index{rand(tree.size() + 1)};
+        size_t size{rand(kMaxBulkSize + 1)};
+        if (size == 0) {
+          cout << "insert empty range at index " << index << "\n";
+        } else {
+          cout << "insert ["
+              << value << ".."
+              << (value + size - 1)
+              << "] at index " << index << "\n";
+        }
+        switch (op_2) {
+          case 0: { // insert
+            vector<Value> list_to_insert;
+            for (size_t j{0}; j < size; ++j) {
+              list_to_insert.push_back(value);
+              ++value;
+            }
+
+            list.insert(list.begin() + index,
+                list_to_insert.begin(), list_to_insert.end());
+            auto it{tree.insert(
+                tree.get_iterator_at_index(index),
+                list_to_insert.begin(),
+                list_to_insert.end())};
+            CHECK(it == tree.get_iterator_at_index(index));
+            break;
+          }
+          case 1: { // join
+            Tree tree_to_insert;
+            for (size_t j{0}; j < size; ++j) {
+              tree_to_insert.push_back(value);
+              ++value;
+            }
+
+            list.insert(list.begin() + index,
+                tree_to_insert.begin(), tree_to_insert.end());
+            auto it{tree.join(
+                tree.get_iterator_at_index(index),
+                tree_to_insert)};
             CHECK(it == tree.get_iterator_at_index(index));
             break;
           }
@@ -464,33 +597,8 @@ TEMPLATE_LIST_TEST_CASE("ManagedTree - random single-tree operations",
         }
         break;
       }
-      case 2: { // Insert multiple elements at a random index.
-        size_t index{rand(tree.size() + 1)};
-        size_t size{rand(kMaxBulkSize + 1)};
-        vector<Value> list_to_insert;
-        for (size_t j{0}; j < size; ++j) {
-          list_to_insert.push_back(j + counter * kNumOperations);
-        }
-
-        if (size == 0) {
-          cout << "insert empty range at index " << index << "\n";
-        } else {
-          cout << "insert ["
-              << list_to_insert.front() << ".." << list_to_insert.back()
-              << "] at index " << index << "\n";
-        }
-        list.insert(list.begin() + index,
-            list_to_insert.begin(), list_to_insert.end());
-        auto it{
-            tree.insert(
-              tree.get_iterator_at_index(index),
-              list_to_insert.begin(),
-              list_to_insert.end())};
-        CHECK(it == tree.get_iterator_at_index(index));
-        break;
-      }
       case 3: { // Erase a random interval of elements.
-        size_t begin{rand(tree.size())};
+        size_t begin{rand(tree.size() + 1)};
         size_t length{rand(kMaxBulkSize)};
         size_t end{min(begin + length, tree.size())};
 
@@ -559,58 +667,3 @@ TEMPLATE_LIST_TEST_CASE("ManagedTree - random single-tree operations",
   }
 }
 
-TEMPLATE_LIST_TEST_CASE("ManagedTree - join",
-    "", TreeImpls) {
-  
-  using Tree = obt::ManagedTree<TestType>;
-
-  static constexpr size_t kLength{64};
-
-  Tree tree_1;
-  Tree tree_2;
-  deque<Value> list_1;
-  deque<Value> list_2;
-
-  for (size_t i{0}; i < kLength; ++i) {
-    tree_1.push_back(i);
-    list_1.push_back(i);
-    tree_2.push_back(i + kLength);
-    list_2.push_back(i + kLength);
-  }
-
-  SECTION("front") {
-    tree_1.join_front(tree_2);
-    CHECK(tree_2.empty());
-
-    list_1.insert(list_1.begin(), list_2.begin(), list_2.end());
-    CHECK(equal(
-        tree_1.begin(), tree_1.end(),
-        list_1.begin(), list_1.end()));
-  }
-
-  SECTION("back") {
-    tree_1.join_back(tree_2);
-    CHECK(tree_2.empty());
-
-    list_1.insert(list_1.end(), list_2.begin(), list_2.end());
-    CHECK(equal(
-        tree_1.begin(), tree_1.end(),
-        list_1.begin(), list_1.end()));
-  }
-
-  SECTION("middle") {
-    for (size_t i{0}; i <= tree_1.size(); ++i) {
-      Tree tree_a{tree_1};
-      Tree tree_b{tree_2};
-      
-      tree_a.join(tree_a.get_iterator_at_index(i), tree_b);
-      CHECK(tree_b.empty());
-
-      deque<Value> list_a{list_1};
-      list_a.insert(list_a.begin() + i, list_2.begin(), list_2.end());
-      CHECK(equal(
-          tree_a.begin(), tree_a.end(),
-          list_a.begin(), list_a.end()));
-    }
-  }
-}

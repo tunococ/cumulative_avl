@@ -157,8 +157,7 @@ struct BasicTreeImpl {
 
   /**
    *  @brief
-   *  Takes data from `other` and inserts them at `pos` in `tree`, then returns
-   *    the node that was the first node of `other`.
+   *  Takes data from `other` and inserts them at `pos` in `tree`.
    *  The ownership of all the nodes in `other` is transferred to `tree`
    *    afterwards.
    *
@@ -166,27 +165,25 @@ struct BasicTreeImpl {
    *  If `tree.allocator` cannot deallocate nodes created by `other.allocator`,
    *    the behavior will be undefined.
    */
-  static constexpr NodePtr join(Tree& tree, InsertPosition pos, Tree& other) {
-    NodePtr n{other.first};
+  static constexpr void join(Tree& tree, InsertPosition pos, Tree& other) {
     tree.link(pos, other.root);
     other.clear();
-    return n;
   }
 
   /**
    *  @brief
    *  Similar to `join(tree, tree.get_first_insert_position(), other)`.
    */
-  static constexpr NodePtr join_front(Tree& tree, Tree& other) {
-    return join(tree, tree.get_first_insert_position(), other);
+  static constexpr void join_front(Tree& tree, Tree& other) {
+    join(tree, tree.get_first_insert_position(), other);
   }
 
   /**
    *  @brief
    *  Similar to `join(tree, tree.get_last_insert_position(), other)`.
    */
-  static constexpr NodePtr join_back(Tree& tree, Tree& other) {
-    return join(tree, tree.get_last_insert_position(), other);
+  static constexpr void join_back(Tree& tree, Tree& other) {
+    join(tree, tree.get_last_insert_position(), other);
   }
 
   /**
