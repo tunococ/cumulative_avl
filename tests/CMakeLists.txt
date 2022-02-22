@@ -22,13 +22,13 @@ function(add_benchmark_test module_name)
 endfunction()
 
 add_unit_test(ordered_binary_tree_test
-    "${CMAKE_CURRENT_SOURCE_DIR}/ordered_binary_tree_test.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/ordered_binary_tree_test.cpp"
 )
 
 add_unit_test(managed_tree_test
-    "${CMAKE_CURRENT_SOURCE_DIR}/managed_tree_test.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/managed_tree_test.cpp"
 )
 
 add_benchmark_test(managed_tree_benchmark
-    "${CMAKE_CURRENT_SOURCE_DIR}/managed_tree_benchmark.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/managed_tree_benchmark.cpp"
 )
