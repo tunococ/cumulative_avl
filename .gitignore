@@ -33,3 +33,9 @@
 
 # Build directory
 build
+
+# gutentags
+tags
+tags.lock
+tags.temp
+
